@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -11,13 +12,11 @@ namespace UnityEditor.Build
 		{
 			var input = GenerateAssetBundleBuildInput();
 			var settings = GenerateAssetBundleBuildSettings();
+			var commands = GenerateAssetBundleBuildCommandSet(input, settings);
 
-			var output = BuildAssetBundles(input, settings);
+			var output = AssetBundleBuildInterface.ExecuteAssetBuildCommandSet(commands);
 			foreach (var bundle in output.results)
-			{
-				var assetBundlePath = Path.Combine(settings.outputFolder, bundle.assetBundleName + ".bundle");
-				AssetBundleBuildInterface.CompressAssetBundle(assetBundlePath, AssetBundleCompression.LZ4);
-			}
+				AssetBundleBuildInterface.CompressAssetBundle(bundle.resourceFiles, AssetBundleCompression.LZ4);
 
 			CacheAssetBundleBuildOutput(output, settings);
 		}
@@ -38,11 +37,41 @@ namespace UnityEditor.Build
 			return settings;
 		}
 
+		private static void DebugPrintCommandSet(ref AssetBundleBuildCommandSet commandSet)
+		{
+			var msg = "";
+			if (commandSet.commands != null)
+				foreach (var bundle in commandSet.commands)
+				{
+					msg += string.Format("{0}\n", bundle.assetBundleName);
+					if (bundle.explicitAssets != null)
+						foreach (var asset in bundle.explicitAssets)
+						{
+							msg += string.Format("\t{0}\n", asset.asset);
+							if (asset.includedObjects != null)
+								foreach (var obj in asset.includedObjects)
+									msg += string.Format("\t\t{0}\n", obj);
+							msg += "\t\t------------------------------\n";
+							if (asset.referencedObjects != null)
+								foreach (var obj in asset.referencedObjects)
+									msg += string.Format("\t\t{0}\n", obj);
+						}
+					if (bundle.assetBundleObjects != null)
+						foreach (var obj in bundle.assetBundleObjects)
+							msg += string.Format("\t{0}\n", obj);
+					if (bundle.assetBundleDependencies != null)
+						foreach (var dependency in bundle.assetBundleDependencies)
+							msg += string.Format("\t{0}\n", dependency);
+				}
+
+			UnityEngine.Debug.Log(msg);
+		}
+
 		public static AssetBundleBuildCommandSet GenerateAssetBundleBuildCommandSet(AssetBundleBuildInput input, AssetBundleBuildSettings settings)
 		{
 			// Create commands array matching the size of the input
-			var commands = new AssetBundleBuildCommandSet();
-			commands.commands = new AssetBundleBuildCommandSet.Command[input.definitions.Length];
+			var commandSet = new AssetBundleBuildCommandSet();
+			commandSet.commands = new AssetBundleBuildCommandSet.Command[input.definitions.Length];
 			for (var i = 0; i < input.definitions.Length; ++i)
 			{
 				var definition = input.definitions[i];
@@ -59,29 +88,74 @@ namespace UnityEditor.Build
 					var explicitAsset = new AssetBundleBuildCommandSet.AssetLoadInfo();
 					explicitAsset.asset = definition.explicitAssets[j];
 					explicitAsset.includedObjects = AssetBundleBuildInterface.GetObjectIdentifiersInAsset(definition.explicitAssets[j]);
-					explicitAsset.referencedObjects = AssetBundleBuildInterface.GetPlayerDependenciesForObjects(explicitAsset.includedObjects);
+					// TODO: Maybe update the LLAPI to do this?
+					explicitAsset.referencedObjects = AssetBundleBuildInterface.GetPlayerDependenciesForObjects(explicitAsset.includedObjects).Except(explicitAsset.includedObjects).ToArray();
 
 					command.explicitAssets[j] = explicitAsset;
-
-					// TODO: This pulls in too much (IE: default assets, objects in other bundles, etc)
 					allObjects.UnionWith(explicitAsset.includedObjects);
 					allObjects.UnionWith(explicitAsset.referencedObjects);
 				}
 
-				// Fill out the array of all objects to be written out to this asset bundle
-				// TODO: Filter based on hide flags, default assets, etc
 				command.assetBundleObjects = allObjects.ToArray();
-
-				commands.commands[i] = command;
+				commandSet.commands[i] = command;
 			}
+			
+			// TODO: Debug printing
+			//DebugPrintCommandSet(ref commandSet);
 
-			return commands;
+			// At this point, We have generated fully self contained asset bundles with 0 dependencies.
+			// Default implementation is to reduce duplication of objects by declaring dependencies to other asset bundles
+			// if that other bundle has an explicit asset declared that contains objects needed as dependencies on this asset bundle
+			// We also remove any built in unity objects as they are built with the player (We may want to change this part in the future)
+			CalculateAssetBundleBuildDependencies(ref commandSet);
+			// Note: I may, or may not feel dirty doing mutable thinks to an otherwise should be immutable struct
+
+			// TODO: Debug printing
+			//DebugPrintCommandSet(ref commandSet);
+
+			return commandSet;
 		}
 
-		public static AssetBundleBuildOutput BuildAssetBundles(AssetBundleBuildInput input, AssetBundleBuildSettings settings)
+		public static void CalculateAssetBundleBuildDependencies(ref AssetBundleBuildCommandSet commandSet)
 		{
-			var commands = GenerateAssetBundleBuildCommandSet(input, settings);
-			return AssetBundleBuildInterface.ExecuteAssetBuildCommandSet(commands);
+			// Dictionary for quick included asset lookup
+			var assetToBundleMap = new Dictionary<GUID, string>();
+			for (var i = 0; i < commandSet.commands.Length; ++i)
+			{
+				var bundle = commandSet.commands[i];
+				foreach (var asset in bundle.explicitAssets)
+					assetToBundleMap.Add(asset.asset, commandSet.commands[i].assetBundleName);
+			}
+
+			for (var i = 0; i < commandSet.commands.Length; ++i)
+			{
+				CalculateAssetBundleDependencies(ref commandSet.commands[i], assetToBundleMap);
+			}
+		}
+
+		private static void CalculateAssetBundleDependencies(ref AssetBundleBuildCommandSet.Command bundle, Dictionary<GUID, string> assetToBundleMap)
+		{
+			var allObjects = new List<ObjectIdentifier>(bundle.assetBundleObjects);
+			var dependencies = new HashSet<string>();
+			for (var i = allObjects.Count - 1; i >= 0; --i)
+			{
+				// Remove built in unity objects (We may want to change this part in the future)
+				if (allObjects[i].type == 0)
+				{
+					allObjects.RemoveAt(i);
+					continue;
+				}
+
+				// Check to see if the asset of this object is already explicityly in a bundle
+				var dependency = "";
+				if (!assetToBundleMap.TryGetValue(allObjects[i].guid, out dependency) || dependency == bundle.assetBundleName)
+					continue;
+
+				dependencies.Add(dependency);
+				allObjects.RemoveAt(i);
+			}
+			bundle.assetBundleObjects = allObjects.ToArray();
+			bundle.assetBundleDependencies = dependencies.ToArray();
 		}
 
 		public static void CacheAssetBundleBuildOutput(AssetBundleBuildOutput output, AssetBundleBuildSettings settings)
