@@ -16,7 +16,7 @@ namespace UnityEditor.Build
 
 			var output = AssetBundleBuildInterface.ExecuteAssetBuildCommandSet(commands);
 			foreach (var bundle in output.results)
-				AssetBundleBuildInterface.CompressAssetBundle(bundle.resourceFiles, AssetBundleCompression.LZ4);
+				AssetBundleBuildInterface.ArchiveAndCompressAssetBundle(bundle.resourceFiles, AssetBundleCompression.LZ4);
 
 			CacheAssetBundleBuildOutput(output, settings);
 		}
@@ -88,8 +88,7 @@ namespace UnityEditor.Build
 					var explicitAsset = new AssetBundleBuildCommandSet.AssetLoadInfo();
 					explicitAsset.asset = definition.explicitAssets[j];
 					explicitAsset.includedObjects = AssetBundleBuildInterface.GetObjectIdentifiersInAsset(definition.explicitAssets[j]);
-					// TODO: Maybe update the LLAPI to do this?
-					explicitAsset.referencedObjects = AssetBundleBuildInterface.GetPlayerDependenciesForObjects(explicitAsset.includedObjects).Except(explicitAsset.includedObjects).ToArray();
+					explicitAsset.referencedObjects = AssetBundleBuildInterface.GetPlayerDependenciesForObjects(explicitAsset.includedObjects);
 
 					command.explicitAssets[j] = explicitAsset;
 					allObjects.UnionWith(explicitAsset.includedObjects);
@@ -104,11 +103,11 @@ namespace UnityEditor.Build
 			//DebugPrintCommandSet(ref commandSet);
 
 			// At this point, We have generated fully self contained asset bundles with 0 dependencies.
-			// Default implementation is to reduce duplication of objects by declaring dependencies to other asset bundles
-			// if that other bundle has an explicit asset declared that contains objects needed as dependencies on this asset bundle
+			// Default implementation is to reduce duplication of objects by declaring dependencies to other asset
+			//    bundles if that other asset bundle has an explicit asset declared that contains the objects needed
 			// We also remove any built in unity objects as they are built with the player (We may want to change this part in the future)
 			CalculateAssetBundleBuildDependencies(ref commandSet);
-			// Note: I may, or may not feel dirty doing mutable thinks to an otherwise should be immutable struct
+			// Note: I may, or may not feel dirty doing mutable things to what otherwise should be immutable struct
 
 			// TODO: Debug printing
 			//DebugPrintCommandSet(ref commandSet);
