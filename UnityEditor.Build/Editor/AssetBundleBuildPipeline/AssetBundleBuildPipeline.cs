@@ -27,7 +27,6 @@ namespace UnityEditor.Build
 
 		public static AssetBundleBuildSettings GenerateAssetBundleBuildSettings()
 		{
-			// TODO: settings at this point is unused but this is a rough idea of the struct usage
 			var settings = new AssetBundleBuildSettings();
 			settings.target = EditorUserBuildSettings.activeBuildTarget;
 			settings.outputFolder = "AssetBundles/" + settings.target;
