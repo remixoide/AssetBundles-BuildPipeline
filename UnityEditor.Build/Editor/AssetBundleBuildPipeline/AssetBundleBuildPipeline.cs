@@ -10,21 +10,19 @@ namespace UnityEditor.Build
 		[MenuItem("AssetBundles/Build Asset Bundles")]
 		static void BuildAssetBundlesMenuItem()
 		{
-			var input = GenerateAssetBundleBuildInput();
+			var input = AssetBundleBuildInterface.GenerateAssetBundleBuildInput();
 			var settings = GenerateAssetBundleBuildSettings();
+			var compression = GenerateBuildCompression();
 			var commands = GenerateAssetBundleBuildCommandSet(input, settings);
 
-			var output = AssetBundleBuildInterface.ExecuteAssetBuildCommandSet(commands);
+			// Ensure the output path is created
+			// TODO: mabe we should do something if it exists, incremental building?
+			Directory.CreateDirectory(settings.outputFolder);
+			var output = AssetBundleBuildInterface.WriteResourcefilesForAssetBundles(commands, settings);
 			foreach (var bundle in output.results)
-				AssetBundleBuildInterface.ArchiveAndCompressAssetBundle(bundle.resourceFiles, AssetBundleCompression.LZ4);
+				AssetBundleBuildInterface.ArchiveAndCompressAssetBundle(bundle.resourceFiles, Path.Combine(settings.outputFolder, bundle.assetBundleName), compression);
 
 			CacheAssetBundleBuildOutput(output, settings);
-		}
-
-		public static AssetBundleBuildInput GenerateAssetBundleBuildInput()
-		{
-			// TODO: Currently we do this at the low level as we cannot efficently walk the asset database from the high level yet
-			return AssetBundleBuildInterface.GenerateAssetBundleBuildInput();
 		}
 
 		public static AssetBundleBuildSettings GenerateAssetBundleBuildSettings()
@@ -32,9 +30,20 @@ namespace UnityEditor.Build
 			// TODO: settings at this point is unused but this is a rough idea of the struct usage
 			var settings = new AssetBundleBuildSettings();
 			settings.target = EditorUserBuildSettings.activeBuildTarget;
-			settings.outputFolder = Path.Combine(Directory.GetCurrentDirectory(), "AssetBundles/" + settings.target);
-			settings.options = BuildAssetBundleOptions.None;
+			settings.outputFolder = "AssetBundles/" + settings.target;
+			settings.streamingResources = true;
+			settings.editorBundles = false;
 			return settings;
+		}
+
+		public static BuildCompression GenerateBuildCompression()
+		{
+			BuildCompression compression;
+			compression.compression = CompressionType.Lz4HC;
+			compression.streamed = false;
+			compression.level = CompressionLevel.Maximum;
+			compression.blockSize = AssetBundleBuildInterface.DefaultCompressionBlockSize;
+			return compression;
 		}
 
 		private static void DebugPrintCommandSet(ref AssetBundleBuildCommandSet commandSet)
