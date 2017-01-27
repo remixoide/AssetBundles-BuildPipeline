@@ -16,14 +16,42 @@ namespace UnityEditor.Build
 			return UnityString.Format("{{guid: {1}, fileID: {0}, type: {2}}}", guid, localIdentifierInFile, type);
 		}
 	}
+
+	public enum CompressionType
+	{
+		None,
+		Lzma,
+		Lz4,
+		Lz4HC,
+		Lzham,
+	}
+
+	public enum CompressionLevel
+	{
+		None,
+		Fastest,
+		Fast,
+		Normal,
+		High,
+		Maximum,
+	}
 	
+	public struct BuildCompression
+	{
+		public CompressionType compression;
+		public CompressionLevel level;
+		public uint blockSize;
+		public bool streamed;
+	}
+
 	public struct AssetBundleBuildSettings
 	{
 		public string outputFolder;
 		public BuildTarget target;
-		public BuildAssetBundleOptions options;
+		public bool streamingResources;
+		public bool editorBundles;
 	}
-	
+
 	public struct AssetBundleBuildInput
 	{
 		public struct Definition
@@ -79,17 +107,13 @@ namespace UnityEditor.Build
 		public Result[] results;
 	}
 	
-	public enum AssetBundleCompression
-	{
-		Uncompressed,
-		LZMA,
-		LZ4
-	}
-	
 	public class AssetBundleBuildInterface
 	{
+		// Default block size compression to be used with BuildCompression struct
+		public const uint DefaultCompressionBlockSize = 131072; //128 * 1024;
+
 		// Generates an array of all asset bundles and the assets they include
-		// Notes: We want to move this to C#, however we need extend the asset database api to do so. We felt it best to wait to do this until the new asset database lands.
+		// Notes: Pre-dreprecated as we want to move asset bundle data off of asset meta files and into it's own asset
 		extern public static AssetBundleBuildInput GenerateAssetBundleBuildInput();
 
 		// Get an array of all objects that are in an asset identified by GUID
@@ -105,15 +129,14 @@ namespace UnityEditor.Build
 		extern public static ObjectIdentifier[] GetPlayerDependenciesForObjects(ObjectIdentifier[] objectIDs);
 
 		// Writes out SerializedFile and Resource files for each bundle defined in AssetBundleBuildCommandSet
-		extern public static AssetBundleBuildOutput ExecuteAssetBuildCommandSet(AssetBundleBuildCommandSet commands);
+		extern public static AssetBundleBuildOutput WriteResourcefilesForAssetBundles(AssetBundleBuildCommandSet commands, AssetBundleBuildSettings settings));
 
 		// Archives and compresses SerializedFile and Resource files for a single asset bundle
-		extern public static void CompressAssetBundle(AssetBundleBuildOutput.ResourceFile[] resourceFiles, AssetBundleCompression compression);
+		extern public static void ArchiveAndCompressAssetBundle(AssetBundleBuildOutput.ResourceFile[] resourceFiles, string outputBundlePath, BuildCompression compression);
 
 		// TODO: 
-		// AssetBundleBuildSettings is still very much a work in progress. We are trying to figure out the best granularity of the struct vs each LLAPI call.
 		// Incremental building of asset bundles
-		// Maybe find some better names for types / fields
+		// Maybe find some better names for some types / fields. IE: AssetBundleBuildCommandSet.Command is kinda awkward
 	}
 }
 
