@@ -1,33 +1,50 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UnityEditor.Sprites;
+using UnityEngine;
 
-namespace UnityEditor.Build
+namespace UnityEditor.Build.AssetBundle
 {
 	public class AssetBundleBuildPipeline
 	{
+		private struct StriteTextures
+		{
+			public ObjectIdentifier sourceTexture;
+			public ObjectIdentifier atlasTexture;
+			public string bundleName;
+			public int sourceRefs;
+
+			public StriteTextures(ObjectIdentifier source, ObjectIdentifier atlas, string bundle)
+			{
+				sourceTexture = source;
+				atlasTexture = atlas;
+				bundleName = bundle;
+				sourceRefs = 0;
+			}
+		}
+
 		[MenuItem("AssetBundles/Build Asset Bundles")]
 		static void BuildAssetBundlesMenuItem()
 		{
 			var input = AssetBundleBuildInterface.GenerateAssetBundleBuildInput();
-			var settings = GenerateAssetBundleBuildSettings();
+			var settings = GenerateBuildSettings();
 			var compression = GenerateBuildCompression();
-			var commands = GenerateAssetBundleBuildCommandSet(input, settings);
+			var commands = GenerateBuildCommandSet(input, settings);
 
 			// Ensure the output path is created
 			// TODO: mabe we should do something if it exists, incremental building?
 			Directory.CreateDirectory(settings.outputFolder);
 			var output = AssetBundleBuildInterface.WriteResourcefilesForAssetBundles(commands, settings);
-			foreach (var bundle in output.results)
-				AssetBundleBuildInterface.ArchiveAndCompressAssetBundle(bundle.resourceFiles, Path.Combine(settings.outputFolder, bundle.assetBundleName), compression);
+			//foreach (var bundle in output.results)
+			//	AssetBundleBuildInterface.ArchiveAndCompressAssetBundle(bundle.resourceFiles, Path.Combine(settings.outputFolder, bundle.assetBundleName), compression);
 
-			CacheAssetBundleBuildOutput(output, settings);
+			//CacheAssetBundleBuildOutput(output, settings);
 		}
 
-		public static AssetBundleBuildSettings GenerateAssetBundleBuildSettings()
+		public static BuildSettings GenerateBuildSettings()
 		{
-			var settings = new AssetBundleBuildSettings();
+			var settings = new BuildSettings();
 			settings.target = EditorUserBuildSettings.activeBuildTarget;
 			settings.outputFolder = "AssetBundles/" + settings.target;
 			settings.streamingResources = true;
@@ -41,11 +58,11 @@ namespace UnityEditor.Build
 			compression.compression = CompressionType.Lz4HC;
 			compression.streamed = false;
 			compression.level = CompressionLevel.Maximum;
-			compression.blockSize = AssetBundleBuildInterface.DefaultCompressionBlockSize;
+			compression.blockSize = BuildCompression.DefaultCompressionBlockSize;
 			return compression;
 		}
 
-		private static void DebugPrintCommandSet(ref AssetBundleBuildCommandSet commandSet)
+		private static void DebugPrintCommandSet(ref BuildCommandSet commandSet)
 		{
 			var msg = "";
 			if (commandSet.commands != null)
@@ -75,28 +92,45 @@ namespace UnityEditor.Build
 			UnityEngine.Debug.Log(msg);
 		}
 
-		public static AssetBundleBuildCommandSet GenerateAssetBundleBuildCommandSet(AssetBundleBuildInput input, AssetBundleBuildSettings settings)
+		private static Dictionary<GUID, StriteTextures> m_SpriteMap = new Dictionary<GUID, StriteTextures>();
+
+		public static BuildCommandSet GenerateBuildCommandSet(BuildInput input, BuildSettings settings)
 		{
+			// Rebuild sprite atlas cache for correct dependency calculation
+			Packer.RebuildAtlasCacheIfNeeded(settings.target, true, Packer.Execution.Normal);
+
+			// Need to specal case sprites as we only want to include the source texutre in certain situations
+			m_SpriteMap.Clear();
+
 			// Create commands array matching the size of the input
-			var commandSet = new AssetBundleBuildCommandSet();
-			commandSet.commands = new AssetBundleBuildCommandSet.Command[input.definitions.Length];
+			var commandSet = new BuildCommandSet();
+			commandSet.commands = new BuildCommandSet.Command[input.definitions.Length];
 			for (var i = 0; i < input.definitions.Length; ++i)
 			{
 				var definition = input.definitions[i];
 
 				// Populate each command from asset bundle definition
-				var command = new AssetBundleBuildCommandSet.Command();
+				var command = new BuildCommandSet.Command();
 				command.assetBundleName = definition.assetBundleName;
-				command.explicitAssets = new AssetBundleBuildCommandSet.AssetLoadInfo[definition.explicitAssets.Length];
+				command.explicitAssets = new BuildCommandSet.AssetLoadInfo[definition.explicitAssets.Length];
 
 				// Fill out asset load info and references for each asset in the definition
 				var allObjects = new HashSet<ObjectIdentifier>();
 				for (var j = 0; j < definition.explicitAssets.Length; ++j)
 				{
-					var explicitAsset = new AssetBundleBuildCommandSet.AssetLoadInfo();
+					var explicitAsset = new BuildCommandSet.AssetLoadInfo();
 					explicitAsset.asset = definition.explicitAssets[j];
+					explicitAsset.path = AssetDatabase.GUIDToAssetPath(explicitAsset.asset.ToString());
 					explicitAsset.includedObjects = AssetBundleBuildInterface.GetObjectIdentifiersInAsset(definition.explicitAssets[j]);
 					explicitAsset.referencedObjects = AssetBundleBuildInterface.GetPlayerDependenciesForObjects(explicitAsset.includedObjects);
+
+					// Is this asset a sprite?
+					var type = AssetDatabase.GetMainAssetTypeAtPath(explicitAsset.path);
+					if (type == typeof(Texture2D) && explicitAsset.referencedObjects.Length == 1)
+					{
+						// Source texture should always be the first included object, atlas should always be the first referenced object
+						m_SpriteMap[explicitAsset.referencedObjects[0].guid] = new StriteTextures(explicitAsset.includedObjects[0], explicitAsset.referencedObjects[0], command.assetBundleName);
+					}
 
 					command.explicitAssets[j] = explicitAsset;
 					allObjects.UnionWith(explicitAsset.includedObjects);
@@ -108,7 +142,7 @@ namespace UnityEditor.Build
 			}
 			
 			// TODO: Debug printing
-			//DebugPrintCommandSet(ref commandSet);
+			DebugPrintCommandSet(ref commandSet);
 
 			// At this point, We have generated fully self contained asset bundles with 0 dependencies.
 			// Default implementation is to reduce duplication of objects by declaring dependencies to other asset
@@ -118,12 +152,12 @@ namespace UnityEditor.Build
 			// Note: I may, or may not feel dirty doing mutable things to what otherwise should be immutable struct
 
 			// TODO: Debug printing
-			//DebugPrintCommandSet(ref commandSet);
+			DebugPrintCommandSet(ref commandSet);
 
 			return commandSet;
 		}
 
-		public static void CalculateAssetBundleBuildDependencies(ref AssetBundleBuildCommandSet commandSet)
+		public static void CalculateAssetBundleBuildDependencies(ref BuildCommandSet commandSet)
 		{
 			// Dictionary for quick included asset lookup
 			var assetToBundleMap = new Dictionary<GUID, string>();
@@ -131,30 +165,36 @@ namespace UnityEditor.Build
 			{
 				var bundle = commandSet.commands[i];
 				foreach (var asset in bundle.explicitAssets)
+				{
 					assetToBundleMap.Add(asset.asset, commandSet.commands[i].assetBundleName);
+				}
 			}
 
+			// Calculate dependencies for each bundle
 			for (var i = 0; i < commandSet.commands.Length; ++i)
-			{
 				CalculateAssetBundleDependencies(ref commandSet.commands[i], assetToBundleMap);
-			}
 		}
 
-		private static void CalculateAssetBundleDependencies(ref AssetBundleBuildCommandSet.Command bundle, Dictionary<GUID, string> assetToBundleMap)
+		private static void CalculateAssetBundleDependencies(ref BuildCommandSet.Command bundle, Dictionary<GUID, string> assetToBundleMap)
 		{
 			var allObjects = new List<ObjectIdentifier>(bundle.assetBundleObjects);
 			var dependencies = new HashSet<string>();
 			for (var i = allObjects.Count - 1; i >= 0; --i)
 			{
-				// Remove built in unity objects (We may want to change this part in the future)
+				// If we are dealing with Unity internal object types, do special handling
 				if (allObjects[i].type == 0)
 				{
-					allObjects.RemoveAt(i);
-					continue;
+					if (!m_SpriteMap.ContainsKey(allObjects[i].guid))
+					{
+						// Remove built in unity objects that are not sprite atlas textures
+						// IE: shaders, primitives, etc
+						allObjects.RemoveAt(i);
+						continue;
+					}
 				}
 
 				// Check to see if the asset of this object is already explicityly in a bundle
-				var dependency = "";
+				string dependency;
 				if (!assetToBundleMap.TryGetValue(allObjects[i].guid, out dependency) || dependency == bundle.assetBundleName)
 					continue;
 
@@ -165,7 +205,7 @@ namespace UnityEditor.Build
 			bundle.assetBundleDependencies = dependencies.ToArray();
 		}
 
-		public static void CacheAssetBundleBuildOutput(AssetBundleBuildOutput output, AssetBundleBuildSettings settings)
+		public static void CacheAssetBundleBuildOutput(BuildOutput output, BuildSettings settings)
 		{
 			// TODO: Cache data about this build result for future patching, incremental build, etc
 		}
