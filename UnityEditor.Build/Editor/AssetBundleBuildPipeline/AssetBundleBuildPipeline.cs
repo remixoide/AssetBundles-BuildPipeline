@@ -4,24 +4,15 @@ using System.Linq;
 using UnityEditor.Sprites;
 using UnityEngine;
 
-namespace UnityEditor.Build.AssetBundle
+namespace UnityEditor.Experimental.Build.AssetBundle
 {
 	public class AssetBundleBuildPipeline
 	{
-		private struct StriteTextures
+		[MenuItem("AssetBundles/Build Script DLLs")]
+		static void BuildScriptDLLs()
 		{
-			public ObjectIdentifier sourceTexture;
-			public ObjectIdentifier atlasTexture;
-			public string bundleName;
-			public int sourceRefs;
-
-			public StriteTextures(ObjectIdentifier source, ObjectIdentifier atlas, string bundle)
-			{
-				sourceTexture = source;
-				atlasTexture = atlas;
-				bundleName = bundle;
-				sourceRefs = 0;
-			}
+			var settings = GenerateBuildSettings();
+			BuildPipeline.BuildPlayer(new []{"Assets/Debug/TestScene.unity"}, settings.outputFolder, settings.target, BuildOptions.BuildScriptsOnly);
 		}
 
 		[MenuItem("AssetBundles/Build Asset Bundles")]
@@ -30,23 +21,34 @@ namespace UnityEditor.Build.AssetBundle
 			var input = AssetBundleBuildInterface.GenerateAssetBundleBuildInput();
 			var settings = GenerateBuildSettings();
 			var compression = GenerateBuildCompression();
+
+			// Rebuild sprite atlas cache for correct dependency calculation & writting
+			Packer.RebuildAtlasCacheIfNeeded(settings.target, true, Packer.Execution.Normal);
+
+			// Generate command set with dependencies
 			var commands = GenerateBuildCommandSet(input, settings);
 
 			// Ensure the output path is created
 			// TODO: mabe we should do something if it exists, incremental building?
 			Directory.CreateDirectory(settings.outputFolder);
 			var output = AssetBundleBuildInterface.WriteResourcefilesForAssetBundles(commands, settings);
-			//foreach (var bundle in output.results)
-			//	AssetBundleBuildInterface.ArchiveAndCompressAssetBundle(bundle.resourceFiles, Path.Combine(settings.outputFolder, bundle.assetBundleName), compression);
+			foreach (var bundle in output.results)
+			{
+				var filePath = Path.Combine(settings.outputFolder, bundle.assetBundleName);
+				Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+				AssetBundleBuildInterface.ArchiveAndCompressAssetBundle(bundle.resourceFiles, filePath, compression);
+			}
 
-			//CacheAssetBundleBuildOutput(output, settings);
+			CacheAssetBundleBuildOutput(output, settings);
 		}
 
 		public static BuildSettings GenerateBuildSettings()
 		{
 			var settings = new BuildSettings();
 			settings.target = EditorUserBuildSettings.activeBuildTarget;
+			settings.group = EditorUserBuildSettings.selectedBuildTargetGroup;
 			settings.outputFolder = "AssetBundles/" + settings.target;
+			settings.scriptsFolder = "AssetBundles/PlayerScripts";
 			settings.streamingResources = true;
 			settings.editorBundles = false;
 			return settings;
@@ -92,13 +94,11 @@ namespace UnityEditor.Build.AssetBundle
 			UnityEngine.Debug.Log(msg);
 		}
 
-		private static Dictionary<GUID, StriteTextures> m_SpriteMap = new Dictionary<GUID, StriteTextures>();
+		// TODO: Improve sprite handling
+		private static HashSet<GUID> m_SpriteMap = new HashSet<GUID>();
 
 		public static BuildCommandSet GenerateBuildCommandSet(BuildInput input, BuildSettings settings)
 		{
-			// Rebuild sprite atlas cache for correct dependency calculation
-			Packer.RebuildAtlasCacheIfNeeded(settings.target, true, Packer.Execution.Normal);
-
 			// Need to specal case sprites as we only want to include the source texutre in certain situations
 			m_SpriteMap.Clear();
 
@@ -121,7 +121,7 @@ namespace UnityEditor.Build.AssetBundle
 					var explicitAsset = new BuildCommandSet.AssetLoadInfo();
 					explicitAsset.asset = definition.explicitAssets[j];
 					explicitAsset.path = AssetDatabase.GUIDToAssetPath(explicitAsset.asset.ToString());
-					explicitAsset.includedObjects = AssetBundleBuildInterface.GetObjectIdentifiersInAsset(definition.explicitAssets[j]);
+					explicitAsset.includedObjects = AssetBundleBuildInterface.GetPlayerObjectIdentifiersInAsset(definition.explicitAssets[j]);
 					explicitAsset.referencedObjects = AssetBundleBuildInterface.GetPlayerDependenciesForObjects(explicitAsset.includedObjects);
 
 					// Is this asset a sprite?
@@ -129,7 +129,7 @@ namespace UnityEditor.Build.AssetBundle
 					if (type == typeof(Texture2D) && explicitAsset.referencedObjects.Length == 1)
 					{
 						// Source texture should always be the first included object, atlas should always be the first referenced object
-						m_SpriteMap[explicitAsset.referencedObjects[0].guid] = new StriteTextures(explicitAsset.includedObjects[0], explicitAsset.referencedObjects[0], command.assetBundleName);
+						m_SpriteMap.Add(explicitAsset.referencedObjects[0].guid);
 					}
 
 					command.explicitAssets[j] = explicitAsset;
@@ -184,7 +184,7 @@ namespace UnityEditor.Build.AssetBundle
 				// If we are dealing with Unity internal object types, do special handling
 				if (allObjects[i].type == 0)
 				{
-					if (!m_SpriteMap.ContainsKey(allObjects[i].guid))
+					if (!m_SpriteMap.Contains(allObjects[i].guid))
 					{
 						// Remove built in unity objects that are not sprite atlas textures
 						// IE: shaders, primitives, etc
