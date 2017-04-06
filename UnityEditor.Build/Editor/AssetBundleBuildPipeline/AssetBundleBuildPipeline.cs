@@ -92,14 +92,25 @@ namespace UnityEditor.Build.AssetBundle
             // Generate Unity5 compatible manifest files
             string[] manifestfiles;
             var manifestWriter = new Unity5ManifestWriter();
-            hash = manifestWriter.CalculateInputHash(commands, output, crc, settings.outputFolder);
+            hash = manifestWriter.CalculateInputHash(depCommands, output, crc, settings.outputFolder);
             cachedPath = GetPathForCachedResults(hash, "Unity5ManifestWriter", settings.outputFolder);
             if (!TryLoadCachedResults(cachedPath, out manifestfiles))
             {
-                if (!manifestWriter.Convert(commands, output, crc, settings.outputFolder, out manifestfiles))
+                if (!manifestWriter.Convert(depCommands, output, crc, settings.outputFolder, out manifestfiles))
                     return;
                 SaveCachedResults(cachedPath, manifestfiles);
             }
+        }
+
+        [MenuItem("AssetBundles/Wipe Cached Results")]
+        public static void WipeCachedResults()
+        {
+            var settings = GenerateBuildSettings();
+            if (!Directory.Exists(settings.outputFolder))
+                return;
+            var cacheFiles = Directory.GetFiles(settings.outputFolder, "*.blob");
+            foreach (var file in cacheFiles)
+                File.Delete(file);
         }
 
         public static string GetPathForCachedResults(long hash, string type, string folderPath)
