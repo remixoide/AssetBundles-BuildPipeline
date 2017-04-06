@@ -14,6 +14,8 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
         public bool Convert(BuildOutput output, BuildCompression compression, string outputFolder, out uint[] crc)
         {
+            // TODO: Validate compression settings
+
             crc = new uint[output.results.Length];
 
             for (var i = 0; i < output.results.Length; i++)
