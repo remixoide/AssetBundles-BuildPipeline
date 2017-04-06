@@ -39,9 +39,14 @@ namespace UnityEditor.Build.Utilities
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         };
 
-        public MD4()
+        private MD4()
         {
             Initialize();
+        }
+
+        public new static MD4 Create()
+        {
+            return new MD4();
         }
 
         public override void Initialize()
@@ -78,11 +83,11 @@ namespace UnityEditor.Build.Utilities
         protected override byte[] HashFinal()
         {
             var bytes = BitConverter.GetBytes(m_Bytes << 3);
-        
+            
             var length = ((m_Bytes + 8) & 0x7fffffc0) + 56 - m_Bytes;
             HashCore(kPadding, 0, (int)length);
             HashCore(bytes, 0, 4);
-            HashCore(kPadding, (int)length - 4, 4);
+            HashCore(kPadding, kPadding.Length - 4, 4);
         
             var output = new byte[16];
             output[ 0] = (byte)( m_Buffer[0]        & 0xff);

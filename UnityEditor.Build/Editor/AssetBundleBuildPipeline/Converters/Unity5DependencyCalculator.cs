@@ -13,14 +13,15 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
         private static readonly SerializationInfoComparer kCompareer = new SerializationInfoComparer();
 
-        public int GetInputHash(BuildCommandSet input)
+        public long CalculateInputHash(BuildCommandSet input)
         {
-            return input.GetHashCode();
+            return HashingMethods.CalculateMD5Hash(input);
         }
 
         public bool Convert(BuildCommandSet input, out BuildCommandSet output)
         {
             output = input;
+
             if (input.commands.IsNullOrEmpty())
                 return false;
 

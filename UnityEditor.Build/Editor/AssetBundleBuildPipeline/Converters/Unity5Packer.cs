@@ -9,15 +9,35 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
     public class Unity5Packer : IDataConverter<BuildInput, BuildTarget, BuildCommandSet>
     {
         private static readonly SerializationInfoComparer kCompareer = new SerializationInfoComparer();
-
-        public int GetInputHash(BuildInput input, BuildTarget target)
+        
+        public long CalculateInputHash(BuildInput input, BuildTarget target)
         {
-            return input.GetHashCode() ^ target.GetHashCode();
+            var assetHashes = new List<string>();
+            if (!input.definitions.IsNullOrEmpty())
+            {
+                for (var i = 0; i < input.definitions.Length; i++)
+                {
+                    if (input.definitions[i].explicitAssets.IsNullOrEmpty())
+                        continue;
+
+                    for (var k = 0; k < input.definitions[i].explicitAssets.Length; k++)
+                    {
+                        // TODO: Create GUIDToAssetPath that takes GUID struct
+                        var path = AssetDatabase.GUIDToAssetPath(input.definitions[i].explicitAssets[k].asset.ToString());
+                        var hash = AssetDatabase.GetAssetDependencyHash(path);
+                        // TODO: Figure out a way to not create a string for every hash.
+                        assetHashes.Add(hash.ToString());
+                    }
+                }
+            }
+
+            return HashingMethods.CalculateMD5Hash(input, target, assetHashes);
         }
 
         public bool Convert(BuildInput input, BuildTarget target, out BuildCommandSet output)
         {
             output = new BuildCommandSet();
+
             if (input.definitions.IsNullOrEmpty())
                 return false;
             
@@ -64,31 +84,29 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             return true;
         }
 
-        private long CalculateSerializationIndexFromObjectIdentifier(ObjectIdentifier objectID)
+        private static long CalculateSerializationIndexFromObjectIdentifier(ObjectIdentifier objectID)
         {
-            long hash;
-            using (var md4 = new MD4())
+            byte[] bytes;
+            var md4 = MD4.Create();
+            if (objectID.fileType == FileType.MetaAssetType || objectID.fileType == FileType.SerializedAssetType)
             {
-                byte[] bytes;
-                if (objectID.fileType == FileType.MetaAssetType || objectID.fileType == FileType.SerializedAssetType)
-                {
-                    // TODO: Variant info
-                    bytes = Encoding.ASCII.GetBytes(objectID.guid.ToString());
-                    md4.TransformBlock(bytes, 0, bytes.Length, bytes, 0);
-                    bytes = BitConverter.GetBytes((int) objectID.fileType);
-                    md4.TransformBlock(bytes, 0, bytes.Length, bytes, 0);
-                }
-                // Or path
-                else
-                {
-                    bytes = Encoding.ASCII.GetBytes(objectID.filePath);
-                    md4.TransformBlock(bytes, 0, bytes.Length, bytes, 0);
-                }
-
-                bytes = BitConverter.GetBytes(objectID.localIdentifierInFile);
-                md4.TransformFinalBlock(bytes, 0, bytes.Length);
-                hash = BitConverter.ToInt64(md4.Hash, 0);
+                // TODO: Variant info
+                // NOTE: ToString() required as unity5 used the guid as a string to hash
+                bytes = Encoding.ASCII.GetBytes(objectID.guid.ToString());
+                md4.TransformBlock(bytes, 0, bytes.Length, bytes, 0);
+                bytes = BitConverter.GetBytes((int) objectID.fileType);
+                md4.TransformBlock(bytes, 0, bytes.Length, bytes, 0);
             }
+            // Or path
+            else
+            {
+                bytes = Encoding.ASCII.GetBytes(objectID.filePath);
+                md4.TransformBlock(bytes, 0, bytes.Length, bytes, 0);
+            }
+
+            bytes = BitConverter.GetBytes(objectID.localIdentifierInFile);
+            md4.TransformFinalBlock(bytes, 0, bytes.Length);
+            var hash = BitConverter.ToInt64(md4.Hash, 0);
             return hash;
         }
     }

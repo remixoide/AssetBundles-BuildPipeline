@@ -1,21 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using UnityEditor.Build.Utilities;
+﻿using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
 
 namespace UnityEditor.Build.AssetBundle.DataConverters
 {
     public class AddressableAssetPacker : IDataConverter<BuildInput.AddressableAsset[], BuildInput>
     {
-        public int GetInputHash(BuildInput.AddressableAsset[] input)
+        public long CalculateInputHash(BuildInput.AddressableAsset[] input)
         {
-            return input.GetHashCode();
+            return HashingMethods.CalculateMD5Hash(input);
         }
 
         public bool Convert(BuildInput.AddressableAsset[] input, out BuildInput output)
         {
             output = new BuildInput();
+
             if (input.IsNullOrEmpty())
             {
                 BuildLogger.LogError("Unable to continue packing. Input is null or empty!");

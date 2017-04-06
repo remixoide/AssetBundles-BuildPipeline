@@ -5,15 +5,21 @@
 
     }
 
-    public interface IDataConverter<in I, O>
+    public interface IDataConverter<in I, O> : IDataConverter
     {
-        int GetInputHash(I input);
+        long CalculateInputHash(I input);
         bool Convert(I input, out O output);
     }
 
-    public interface IDataConverter<in I1, in I2, O1>
+    public interface IDataConverter<in I1, in I2, O1> : IDataConverter
     {
-        int GetInputHash(I1 input1, I2 input2);
+        long CalculateInputHash(I1 input1, I2 input2);
         bool Convert(I1 input, I2 input2, out O1 output);
+    }
+
+    public interface IDataConverter<in I1, in I2, in I3, O1> : IDataConverter
+    {
+        long CalculateInputHash(I1 input1, I2 input2, I3 input3);
+        bool Convert(I1 input, I2 input2, I3 input3, out O1 output);
     }
 }

@@ -1,5 +1,4 @@
-﻿using System.IO;
-using System.Text;
+﻿using System.Text;
 using UnityEditor.Build.AssetBundle.DataConverters;
 using UnityEditor.Experimental.Build.AssetBundle;
 using UnityEditor.Sprites;
@@ -8,45 +7,6 @@ namespace UnityEditor.Build.AssetBundle
 {
     public class AssetBundleBuildPipeline
     {
-        [MenuItem("AssetBundles/Build Asset Bundles")]
-        static void BuildAssetBundlesMenuItem()
-        {
-            var input = BuildInterface.GenerateBuildInput();
-            var settings = GenerateBuildSettings();
-            var compression = BuildCompression.DefaultUncompressed;
-
-            // Rebuild sprite atlas cache for correct dependency calculation & writting
-            Packer.RebuildAtlasCacheIfNeeded(settings.target, true, Packer.Execution.Normal);
-
-            // Generate command set
-            BuildCommandSet commands;
-            var packer = new Unity5Packer();
-            if (!packer.Convert(input, settings.target, out commands))
-                return;
-            
-            DebugPrintCommandSet(ref commands);
-
-            // Calculate dependencies
-            var dependencyCalculator = new Unity5DependencyCalculator();
-            if (!dependencyCalculator.Convert(commands, out commands))
-                return;
-            
-            DebugPrintCommandSet(ref commands);
-
-            // Ensure the output path is created
-            // TODO: implement incremental building when LLAPI supports it
-            Directory.CreateDirectory(settings.outputFolder);
-            var output = BuildInterface.WriteResourceFiles(commands, settings);
-            foreach (var bundle in output.results)
-            {
-                var filePath = Path.Combine(settings.outputFolder, bundle.assetBundleName);
-                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                BuildInterface.ArchiveAndCompress(bundle.resourceFiles, filePath, compression);
-            }
-
-            CacheAssetBundleBuildOutput(output, settings);
-        }
-
         public static BuildSettings GenerateBuildSettings()
         {
             var settings = new BuildSettings();
@@ -60,8 +20,48 @@ namespace UnityEditor.Build.AssetBundle
             return settings;
         }
 
+        [MenuItem("AssetBundles/Build Asset Bundles")]
+        public static void BuildAssetBundles()
+        {
+            var input = BuildInterface.GenerateBuildInput();
+            var settings = GenerateBuildSettings();
+            var compression = BuildCompression.DefaultUncompressed;
+
+            // Rebuild sprite atlas cache for correct dependency calculation & writting
+            Packer.RebuildAtlasCacheIfNeeded(settings.target, true, Packer.Execution.Normal);
+
+            // Generate command set
+            BuildCommandSet commands;
+            var packer = new Unity5Packer();
+            if (!packer.Convert(input, settings.target, out commands))
+                return;
+
+            //DebugPrintCommandSet(ref commands);
+
+            // Calculate dependencies
+            var dependencyCalculator = new Unity5DependencyCalculator();
+            if (!dependencyCalculator.Convert(commands, out commands))
+                return;
+
+            
+            //DebugPrintCommandSet(ref commands);
+            
+            // TODO: implement incremental building when LLAPI supports it
+
+            BuildOutput output;
+            var resourceWriter = new ResourceWriter();
+            if (!resourceWriter.Convert(commands, settings, out output))
+                return;
+
+            uint[] crc;
+            var archiveWriter = new ArchiveWriter();
+            if (!archiveWriter.Convert(output, compression, settings.outputFolder, out crc))
+                return;
+        }
+
         private static void DebugPrintCommandSet(ref BuildCommandSet commandSet)
         {
+            // TODO: this is ugly, fix it
             var msg = new StringBuilder();
             if (commandSet.commands != null)
             {
@@ -105,11 +105,6 @@ namespace UnityEditor.Build.AssetBundle
                 }
             }
             UnityEngine.Debug.Log(msg);
-        }
-
-        public static void CacheAssetBundleBuildOutput(BuildOutput output, BuildSettings settings)
-        {
-            // TODO: Cache data about this build result for future patching, incremental build, etc
         }
     }
 }
