@@ -1,38 +1,40 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using UnityEditor.Build.Cache;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
+using UnityEngine;
 
 namespace UnityEditor.Build.AssetBundle.DataConverters
 {
 
-//ManifestFileVersion: 0
-//CRC: 1735757978
-//Hashes:
-//  AssetFileHash:
-//    serializedVersion: 2
-//    Hash: 9528288fb7408f96c2a7a8166eaec985
-//  TypeTreeHash:
-//    serializedVersion: 2
-//    Hash: 2c5b623468f79f9015be2d52fd987aee
-//HashAppended: 0
-//ClassTypes:
-//- Class: 21
-//  Script: {instanceID: 0}
-//- Class: 48
-//  Script: {instanceID: 0}
-//- Class: 114
-//  Script: {fileID: 11500000, guid: 206794ec26056d846b1615847cacd2cc, type: 3}
-//Assets:
-//- Assets/Debug/Materials/RedMaterial.mat
-//- Assets/Debug/Materials/BlueMaterial.mat
-//Dependencies:
-//- C:/Projects/AssetBundlesHLAPI/AssetBundles/shaders
+    //ManifestFileVersion: 0
+    //CRC: 1735757978
+    //Hashes:
+    //  AssetFileHash:
+    //    serializedVersion: 2
+    //    Hash: 9528288fb7408f96c2a7a8166eaec985
+    //  TypeTreeHash:
+    //    serializedVersion: 2
+    //    Hash: 2c5b623468f79f9015be2d52fd987aee
+    //HashAppended: 0
+    //ClassTypes:
+    //- Class: 21
+    //  Script: {instanceID: 0}
+    //- Class: 48
+    //  Script: {instanceID: 0}
+    //- Class: 114
+    //  Script: {fileID: 11500000, guid: 206794ec26056d846b1615847cacd2cc, type: 3}
+    //Assets:
+    //- Assets/Debug/Materials/RedMaterial.mat
+    //- Assets/Debug/Materials/BlueMaterial.mat
+    //Dependencies:
+    //- C:/Projects/AssetBundlesHLAPI/AssetBundles/shaders
 
 
     public class Unity5ManifestWriter : IDataConverter<BuildCommandSet, BuildOutput, uint[], string, string[]>
     {
-        public long CalculateInputHash(BuildCommandSet commands, BuildOutput output, uint[] crcs, string outputFolder)
+        public Hash128 CalculateInputHash(BuildCommandSet commands, BuildOutput output, uint[] crcs, string outputFolder)
         {
             return HashingMethods.CalculateMD5Hash(commands, output, crcs);
         }
@@ -46,11 +48,14 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 BuildLogger.LogError("Unable to continue writting manifests. No asset bundle results.");
                 return false;
             }
-            
+
+            // TODO: Prepare settings.outputFolder
+            Directory.CreateDirectory(outputFolder);
+
             for (var i = 0; i < output.results.Length; i++)
             {
                 var manifestPath = GetManifestFilePath(output.results[i].assetBundleName, outputFolder);
-                manifests.Add(manifestPath);
+                manifests.Add(Path.GetFileName(manifestPath));
                 using (var stream = new StreamWriter(manifestPath))
                 {
                     // TODO: Implement assetFileHash, typeTreeHash, and includedTypes at LLAPI or HLAPI
@@ -64,9 +69,9 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                     stream.WriteLine("    serializedVersion: 2");
                     stream.WriteLine("    Hash: 1"); // output.typeTreeHash
                     stream.WriteLine("HashAppended: 0");
-                    
+
                     //if (output.results[i].includedTypes.IsNullOrEmpty())
-                        stream.WriteLine("ClassTypes: []");
+                    stream.WriteLine("ClassTypes: []");
                     //else
                     //{
                     //    stream.WriteLine("ClassTypes:");
@@ -107,8 +112,35 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                         stream.WriteLine("Dependencies: []");
                 }
             }
-            
+
             manifestFiles = manifests.ToArray();
+            return true;
+        }
+
+        public bool LoadFromCacheOrConvert(BuildCommandSet input, BuildOutput output, uint[] crc, string outputFolder, out string[] manifestFiles)
+        {
+            string rootCachePath;
+            string[] artifactPaths;
+
+            // TODO: Probably can skip caching the results as it is equal to artifact paths
+            var hash = CalculateInputHash(input, output, crc, outputFolder);
+            if (BuildCache.TryLoadCahcedResultsAndArtifacts(hash, out manifestFiles, out artifactPaths, out rootCachePath))
+            {
+                // TODO: Prepare settings.outputFolder
+                Directory.CreateDirectory(outputFolder);
+
+                foreach (var artifact in artifactPaths)
+                {
+                    var file = new FileInfo(artifact);
+                    file.CopyTo(artifact.Replace(rootCachePath, outputFolder), true);
+                }
+                return true;
+            }
+
+            if (!Convert(input, output, crc, outputFolder, out manifestFiles))
+                return false;
+
+            BuildCache.SaveCachedResultsAndArtifacts(hash, manifestFiles, manifestFiles, outputFolder);
             return true;
         }
 

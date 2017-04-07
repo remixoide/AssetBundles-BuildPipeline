@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor.Build.Cache;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
+using UnityEngine;
 
 namespace UnityEditor.Build.AssetBundle.DataConverters
 {
@@ -13,7 +15,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
         private static readonly SerializationInfoComparer kCompareer = new SerializationInfoComparer();
 
-        public long CalculateInputHash(BuildCommandSet input)
+        public Hash128 CalculateInputHash(BuildCommandSet input)
         {
             return HashingMethods.CalculateMD5Hash(input);
         }
@@ -97,6 +99,19 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 dependencies.Clear();
             }
 
+            return true;
+        }
+
+        public bool LoadFromCacheOrConvert(BuildCommandSet input, out BuildCommandSet output)
+        {
+            var hash = CalculateInputHash(input);
+            if (BuildCache.TryLoadCachedResults(hash, out output))
+                return true;
+
+            if (!Convert(input, out output))
+                return false;
+
+            BuildCache.SaveCachedResults(hash, output);
             return true;
         }
     }

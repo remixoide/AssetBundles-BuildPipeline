@@ -1,13 +1,15 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using UnityEditor.Build.Cache;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
+using UnityEngine;
 
 namespace UnityEditor.Build.AssetBundle.DataConverters
 {
     public class ResourceWriter : IDataConverter<BuildCommandSet, BuildSettings, BuildOutput>
     {
-        public long CalculateInputHash(BuildCommandSet commandSet, BuildSettings settings)
+        public Hash128 CalculateInputHash(BuildCommandSet commandSet, BuildSettings settings)
         {
             // TODO: Figure out if explicitAssets hash is not enough and we need use assetBundleObjects instead
             var assetHashes = new List<string>();
@@ -29,7 +31,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 }
             }
 
-            return HashingMethods.CalculateMD5Hash(commandSet, settings.target, settings.group);
+            return HashingMethods.CalculateMD5Hash(commandSet, settings.target, settings.group, settings.editorBundles, assetHashes);
         }
 
         public bool Convert(BuildCommandSet commandSet, BuildSettings settings, out BuildOutput output)
@@ -51,6 +53,38 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
             output = BuildInterface.WriteResourceFiles(commandSet, settings);
             // TODO: Change this return based on if WriteResourceFiles was successful or not - Need public BuildReporting
+            return true;
+        }
+
+        public bool LoadFromCacheOrConvert(BuildCommandSet input, BuildSettings settings, out BuildOutput output)
+        {
+            string rootCachePath;
+            string[] artifactPaths;
+
+            var hash = CalculateInputHash(input, settings);
+            if (BuildCache.TryLoadCahcedResultsAndArtifacts(hash, out output, out artifactPaths, out rootCachePath))
+            {
+                // TODO: Prepare settings.outputFolder
+                Directory.CreateDirectory(settings.outputFolder);
+
+                foreach (var artifact in artifactPaths)
+                {
+                    var file = new FileInfo(artifact);
+                    file.CopyTo(artifact.Replace(rootCachePath, settings.outputFolder), true);
+                }
+                return true;
+            }
+
+            if (!Convert(input, settings, out output))
+                return false;
+           
+            var artifacts = new List<string>();
+            for (var i = 0; i < output.results.Length; i++)
+            {
+                for (var j = 0; j < output.results[i].resourceFiles.Length; j++)
+                    artifacts.Add(Path.GetFileName(output.results[i].resourceFiles[j].fileName));
+            }
+            BuildCache.SaveCachedResultsAndArtifacts(hash, output, artifacts.ToArray(), settings.outputFolder);
             return true;
         }
 

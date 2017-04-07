@@ -12,6 +12,12 @@ namespace UnityEditor.Build.Utilities
         }
 
         [Conditional("DEBUG")]
+        public static void Log(object msg)
+        {
+            Debug.Log(msg);
+        }
+
+        [Conditional("DEBUG")]
         public static void Log(string msg, params object[] attrs)
         {
             Debug.Log(string.Format(msg, attrs));
@@ -24,6 +30,12 @@ namespace UnityEditor.Build.Utilities
         }
 
         [Conditional("DEBUG")]
+        public static void LogWarning(object msg)
+        {
+            Debug.LogWarning(msg);
+        }
+
+        [Conditional("DEBUG")]
         public static void LogWarning(string msg, params object[] attrs)
         {
             Debug.LogWarning(string.Format(msg, attrs));
@@ -31,6 +43,12 @@ namespace UnityEditor.Build.Utilities
         
         [Conditional("DEBUG")]
         public static void LogError(string msg)
+        {
+            Debug.LogError(msg);
+        }
+        
+        [Conditional("DEBUG")]
+        public static void LogError(object msg)
         {
             Debug.LogError(msg);
         }

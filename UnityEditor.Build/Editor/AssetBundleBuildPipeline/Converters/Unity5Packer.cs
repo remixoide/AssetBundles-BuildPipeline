@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using UnityEditor.Build.Cache;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
+using UnityEngine;
 
 namespace UnityEditor.Build.AssetBundle.DataConverters
 {
@@ -10,7 +12,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
     {
         private static readonly SerializationInfoComparer kCompareer = new SerializationInfoComparer();
         
-        public long CalculateInputHash(BuildInput input, BuildTarget target)
+        public Hash128 CalculateInputHash(BuildInput input, BuildTarget target)
         {
             var assetHashes = new List<string>();
             if (!input.definitions.IsNullOrEmpty())
@@ -81,6 +83,19 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             }
             Array.Resize(ref output.commands, o + 1);
 
+            return true;
+        }
+
+        public bool LoadFromCacheOrConvert(BuildInput input, BuildTarget target, out BuildCommandSet output)
+        {
+            var hash = CalculateInputHash(input, target);
+            if (BuildCache.TryLoadCachedResults(hash, out output))
+                return true;
+
+            if (!Convert(input, target, out output))
+                return false;
+
+            BuildCache.SaveCachedResults(hash, output);
             return true;
         }
 

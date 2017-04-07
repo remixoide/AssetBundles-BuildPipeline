@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
+﻿using System.Text;
 using UnityEditor.Build.AssetBundle.DataConverters;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
@@ -18,7 +15,7 @@ namespace UnityEditor.Build.AssetBundle
             settings.group = EditorUserBuildSettings.selectedBuildTargetGroup;
             settings.outputFolder = "AssetBundles/" + settings.target;
             // Example: Point this to the dll's of previous player build
-            // TODO: wil improve this functionality as certain platforms don't leave their dll's for reuse after a player build
+            // TODO: improve this, certain platforms don't have dll's after a player build (IL2CPP, Android, etc)
             //settings.scriptsFolder = "Build/Player_Data/Managed";
             settings.editorBundles = false;
             return settings;
@@ -37,29 +34,16 @@ namespace UnityEditor.Build.AssetBundle
             // Generate command set
             BuildCommandSet commands;
             var packer = new Unity5Packer();
-            var hash = packer.CalculateInputHash(input, settings.target);
-            var cachedPath = GetPathForCachedResults(hash, "Unity5Packer", settings.outputFolder);
-            if (!TryLoadCachedResults(cachedPath, out commands))
-            {
-                if (!packer.Convert(input, settings.target, out commands))
-                    return;
-                SaveCachedResults(cachedPath, commands);
-            }
+            if (!packer.LoadFromCacheOrConvert(input, settings.target, out commands))
+                return;
 
             //DebugPrintCommandSet(ref commands);
 
             // Calculate dependencies
             BuildCommandSet depCommands;
             var dependencyCalculator = new Unity5DependencyCalculator();
-            hash = dependencyCalculator.CalculateInputHash(commands);
-            cachedPath = GetPathForCachedResults(hash, "Unity5DependencyCalculator", settings.outputFolder);
-            if (!TryLoadCachedResults(cachedPath, out depCommands))
-            {
-                if (!dependencyCalculator.Convert(commands, out depCommands))
-                    return;
-                SaveCachedResults(cachedPath, depCommands);
-                // TODO: BuildCommandSet.Command.assetBundleDependencies serialization
-            }
+            if (!dependencyCalculator.LoadFromCacheOrConvert(commands, out depCommands))
+                return;
             
             //DebugPrintCommandSet(ref commands);
 
@@ -68,92 +52,22 @@ namespace UnityEditor.Build.AssetBundle
             // Write out resource files
             BuildOutput output;
             var resourceWriter = new ResourceWriter();
-            hash = resourceWriter.CalculateInputHash(depCommands, settings);
-            cachedPath = GetPathForCachedResults(hash, "ResourceWriter", settings.outputFolder);
-            if (!TryLoadCachedResults(cachedPath, out output))
-            {
-                if (!resourceWriter.Convert(depCommands, settings, out output))
-                    return;
-                SaveCachedResults(cachedPath, output);
-            }
+            if (!resourceWriter.LoadFromCacheOrConvert(depCommands, settings, out output))
+                return;
 
             // Archive and compress resource files
             uint[] crc;
             var archiveWriter = new ArchiveWriter();
-            hash = archiveWriter.CalculateInputHash(output, compression, settings.outputFolder);
-            cachedPath = GetPathForCachedResults(hash, "ArchiveWriter", settings.outputFolder);
-            if (!TryLoadCachedResults(cachedPath, out crc))
-            {
-                if (!archiveWriter.Convert(output, compression, settings.outputFolder, out crc))
-                    return;
-                SaveCachedResults(cachedPath, crc);
-            }
+            if (!archiveWriter.LoadFromCacheOrConvert(output, compression, settings.outputFolder, out crc))
+                return;
 
             // Generate Unity5 compatible manifest files
             string[] manifestfiles;
             var manifestWriter = new Unity5ManifestWriter();
-            hash = manifestWriter.CalculateInputHash(depCommands, output, crc, settings.outputFolder);
-            cachedPath = GetPathForCachedResults(hash, "Unity5ManifestWriter", settings.outputFolder);
-            if (!TryLoadCachedResults(cachedPath, out manifestfiles))
-            {
-                if (!manifestWriter.Convert(depCommands, output, crc, settings.outputFolder, out manifestfiles))
-                    return;
-                SaveCachedResults(cachedPath, manifestfiles);
-            }
-        }
-
-        [MenuItem("AssetBundles/Wipe Cached Results")]
-        public static void WipeCachedResults()
-        {
-            var settings = GenerateBuildSettings();
-            if (!Directory.Exists(settings.outputFolder))
+            if (!manifestWriter.LoadFromCacheOrConvert(depCommands, output, crc, settings.outputFolder, out manifestfiles))
                 return;
-            var cacheFiles = Directory.GetFiles(settings.outputFolder, "*.blob");
-            foreach (var file in cacheFiles)
-                File.Delete(file);
-        }
-
-        public static string GetPathForCachedResults(long hash, string type, string folderPath)
-        {
-            return string.Format("{0}/{1}_{2:x16}.blob", folderPath, type, hash);
-        }
-
-        public static bool TryLoadCachedResults<T>(string filePath, out T results)
-        {
-            if (!File.Exists(filePath))
-            {
-                results = default(T);
-                return false;
-            }
-
-            try
-            {
-                var formatter = new BinaryFormatter();
-                using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
-                    results = (T) formatter.Deserialize(stream);
-            }
-            catch (Exception)
-            {
-                results = default(T);
-                return false;
-            }
-            return true;
-        }
-
-        public static bool SaveCachedResults<T>(string filePath, T results)
-        {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                var formatter = new BinaryFormatter();
-                using (var stream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Write))
-                    formatter.Serialize(stream, results);
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-            return true;
+            
+            BuildLogger.Log("Built Asset Bundles");
         }
 
         private static void DebugPrintCommandSet(ref BuildCommandSet commandSet)
@@ -205,7 +119,7 @@ namespace UnityEditor.Build.AssetBundle
                     msg.Append("\n");
                 }
             }
-            UnityEngine.Debug.Log(msg);
+            BuildLogger.Log(msg);
         }
     }
 }
