@@ -37,31 +37,32 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
             // Generate asset lookup
             var assetToBundle = new Dictionary<GUID, string>();
-            foreach (var bundle in output.commands)
+            for (var i = 0; i < output.commands.Length; i++)
             {
-                if (string.IsNullOrEmpty(bundle.assetBundleName))
+                if (string.IsNullOrEmpty(output.commands[i].assetBundleName))
                 {
                     BuildLogger.LogError("Unable to continue dependency calcualtion. Asset bundle name is null or empty!");
                     return false;
                 }
 
-                if (bundle.explicitAssets.IsNullOrEmpty())
+                if (output.commands[i].explicitAssets.IsNullOrEmpty())
                 {
-                    BuildLogger.LogError("Asset bundle '{0}' does not have any explicit assets defined.", bundle.assetBundleName);
+                    BuildLogger.LogError("Asset bundle '{0}' does not have any explicit assets defined.", output.commands[i].assetBundleName);
                     continue;
                 }
 
-                foreach (var asset in bundle.explicitAssets)
+                for (var k = 0; k < output.commands[i].explicitAssets.Length; k++)
                 {
                     string bundleName;
-                    if (assetToBundle.TryGetValue(asset.asset, out bundleName))
+                    if (assetToBundle.TryGetValue(output.commands[i].explicitAssets[k].asset, out bundleName))
                     {
-                        if (bundleName == bundle.assetBundleName)
+                        if (bundleName == output.commands[i].assetBundleName)
                             continue;
-                        BuildLogger.LogError("Unable to continue dependency calcualtion. Asset '{0}' added to multiple bundles: '{1}', ,'{2}'!", asset.asset, bundleName, bundle.assetBundleName);
+                        BuildLogger.LogError("Unable to continue dependency calcualtion. Asset '{0}' added to multiple bundles: '{1}', ,'{2}'!", 
+                            output.commands[i].explicitAssets[k].asset, bundleName, output.commands[i].assetBundleName);
                         return false;
                     }
-                    assetToBundle.Add(asset.asset, bundle.assetBundleName);
+                    assetToBundle.Add(output.commands[i].explicitAssets[k].asset, output.commands[i].assetBundleName);
                 }
             }
 
