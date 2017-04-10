@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 using UnityEditor.Build.AssetBundle.DataConverters;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
@@ -24,6 +25,9 @@ namespace UnityEditor.Build.AssetBundle
         [MenuItem("AssetBundles/Build Asset Bundles")]
         public static void BuildAssetBundles()
         {
+            var buildTimer = new Stopwatch();
+            buildTimer.Start();
+
             var input = BuildInterface.GenerateBuildInput();
             var settings = GenerateBuildSettings();
             var compression = BuildCompression.DefaultUncompressed;
@@ -45,7 +49,7 @@ namespace UnityEditor.Build.AssetBundle
             if (!dependencyCalculator.Convert(commands, out depCommands))
                 return;
             
-            //DebugPrintCommandSet(ref commands);
+            DebugPrintCommandSet(ref depCommands);
 
             // TODO: implement incremental building when LLAPI supports it
 
@@ -67,19 +71,20 @@ namespace UnityEditor.Build.AssetBundle
             if (!manifestWriter.Convert(depCommands, output, crc, settings.outputFolder, out manifestfiles))
                 return;
             
-            BuildLogger.Log("Built Asset Bundles");
+            buildTimer.Stop();
+            BuildLogger.Log("Build Asset Bundles complete in: {0:c}", buildTimer.Elapsed);
         }
 
         private static void DebugPrintCommandSet(ref BuildCommandSet commandSet)
         {
             // TODO: this debug printing function is ugly as sin, fix it
             var msg = new StringBuilder();
-            if (commandSet.commands.IsNullOrEmpty())
+            if (!commandSet.commands.IsNullOrEmpty())
             {
                 foreach (var bundle in commandSet.commands)
                 {
                     msg.AppendFormat("Bundle: '{0}'\n", bundle.assetBundleName);
-                    if (bundle.explicitAssets.IsNullOrEmpty())
+                    if (!bundle.explicitAssets.IsNullOrEmpty())
                     {
                         msg.Append("\tExplicit Assets:\n");
                         foreach (var asset in bundle.explicitAssets)
@@ -87,14 +92,14 @@ namespace UnityEditor.Build.AssetBundle
                             // TODO: Create GUIDToAssetPath that takes GUID struct
                             var addressableName = string.IsNullOrEmpty(asset.address) ? AssetDatabase.GUIDToAssetPath(asset.asset.ToString()) : asset.address;
                             msg.AppendFormat("\t\tAsset: {0} - '{1}'\n", asset.asset, addressableName);
-                            if (asset.includedObjects.IsNullOrEmpty())
+                            if (!asset.includedObjects.IsNullOrEmpty())
                             {
                                 msg.Append("\t\t\tIncluded Objects:\n");
                                 foreach (var obj in asset.includedObjects)
                                     msg.AppendFormat("\t\t\t\t{0}\n", obj);
                             }
 
-                            if (asset.referencedObjects.IsNullOrEmpty())
+                            if (!asset.referencedObjects.IsNullOrEmpty())
                             {
                                 msg.Append("\t\t\tReferenced Objects:\n");
                                 foreach (var obj in asset.referencedObjects)
@@ -103,14 +108,14 @@ namespace UnityEditor.Build.AssetBundle
                         }
                     }
 
-                    if (bundle.assetBundleObjects.IsNullOrEmpty())
+                    if (!bundle.assetBundleObjects.IsNullOrEmpty())
                     {
                         msg.Append("\tAsset Bundle Objects:\n");
                         foreach (var obj in bundle.assetBundleObjects)
                             msg.AppendFormat("\t\t{0}: {1}\n", obj.serializationIndex, obj.serializationObject);
                     }
 
-                    if (bundle.assetBundleDependencies.IsNullOrEmpty())
+                    if (!bundle.assetBundleDependencies.IsNullOrEmpty())
                     {
                         msg.Append("\tAsset Bundle Dependencies:\n");
                         foreach (var dependency in bundle.assetBundleDependencies)

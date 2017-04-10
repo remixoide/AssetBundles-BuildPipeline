@@ -10,12 +10,27 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 {
     public class Unity5DependencyCalculator : IDataConverter<BuildCommandSet, BuildCommandSet>
     {
-        // TODO: Need to do some more sprite handling work
         private const string kUnityDefaultResourcePath = "library/unity default resources";
+        private const string kUnityAtlasCachePath = "library/atlascache";
 
-        private static readonly SerializationInfoComparer kCompareer = new SerializationInfoComparer();
+        private static readonly SerializationInfoComparer kSerializationInfoComparer = new SerializationInfoComparer();
+        private static readonly ObjectIdentifierComparer kObjectIdentifierComparer = new ObjectIdentifierComparer();
 
         public uint Version { get { return 1; } }
+
+        private struct AtlasRef
+        {
+            public int bundle;
+            public int asset;
+            public int count;
+
+            public AtlasRef(int bundleIndex, int assetIndex)
+            {
+                bundle = bundleIndex;
+                asset = assetIndex;
+                count = 0;
+            }
+        }
 
         public Hash128 CalculateInputHash(BuildCommandSet input)
         {
@@ -37,6 +52,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
             // Generate asset lookup
             var assetToBundle = new Dictionary<GUID, string>();
+            var spriteSourceRef = new Dictionary<ObjectIdentifier, AtlasRef>();
             for (var i = 0; i < output.commands.Length; i++)
             {
                 if (string.IsNullOrEmpty(output.commands[i].assetBundleName))
@@ -51,18 +67,23 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                     continue;
                 }
 
-                for (var k = 0; k < output.commands[i].explicitAssets.Length; k++)
+                for (var j = 0; j < output.commands[i].explicitAssets.Length; j++)
                 {
                     string bundleName;
-                    if (assetToBundle.TryGetValue(output.commands[i].explicitAssets[k].asset, out bundleName))
+                    if (assetToBundle.TryGetValue(output.commands[i].explicitAssets[j].asset, out bundleName))
                     {
                         if (bundleName == output.commands[i].assetBundleName)
                             continue;
                         BuildLogger.LogError("Unable to continue dependency calcualtion. Asset '{0}' added to multiple bundles: '{1}', ,'{2}'!", 
-                            output.commands[i].explicitAssets[k].asset, bundleName, output.commands[i].assetBundleName);
+                            output.commands[i].explicitAssets[j].asset, bundleName, output.commands[i].assetBundleName);
                         return false;
                     }
-                    assetToBundle.Add(output.commands[i].explicitAssets[k].asset, output.commands[i].assetBundleName);
+                    assetToBundle.Add(output.commands[i].explicitAssets[j].asset, output.commands[i].assetBundleName);
+
+                    if (IsAssetSprite(ref output.commands[i].explicitAssets[j]))
+                    {
+                        spriteSourceRef[output.commands[i].explicitAssets[j].includedObjects[0]] = new AtlasRef(i, j);
+                    }
                 }
             }
 
@@ -85,6 +106,13 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                         continue;
                     }
 
+                    AtlasRef refCount;
+                    if (spriteSourceRef.TryGetValue(output.commands[i].assetBundleObjects[j].serializationObject, out refCount) && refCount.bundle != i)
+                    {
+                        refCount.count++;
+                        spriteSourceRef[output.commands[i].assetBundleObjects[j].serializationObject] = refCount;
+                    }
+
                     string dependency;
                     if (!assetToBundle.TryGetValue(output.commands[i].assetBundleObjects[j].serializationObject.guid, out dependency))
                     {
@@ -103,9 +131,34 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 }
                 Array.Resize(ref output.commands[i].assetBundleObjects, end);
                 // Sorting is unneccessary - just makes it more human readable
-                Array.Sort(output.commands[i].assetBundleObjects, kCompareer);
+                Array.Sort(output.commands[i].assetBundleObjects, kSerializationInfoComparer);
                 output.commands[i].assetBundleDependencies = dependencies.OrderBy(s => s).ToArray();
                 dependencies.Clear();
+            }
+
+            // Remove source textures if no references
+            foreach (var refCount in spriteSourceRef)
+            {
+                if (refCount.Value.count != 0)
+                    continue;
+
+                int i = refCount.Value.bundle;
+                int j = refCount.Value.asset;
+                int end = output.commands[i].explicitAssets[j].includedObjects.Length;
+                output.commands[i].explicitAssets[j].includedObjects.Swap(0, end - 1);
+                Array.Resize(ref output.commands[i].explicitAssets[j].includedObjects, end - 1);
+                Array.Sort(output.commands[i].explicitAssets[j].includedObjects, kObjectIdentifierComparer);
+
+                end = output.commands[refCount.Value.bundle].assetBundleObjects.Length;
+                for (j = 0; j < end; j++)
+                {
+                    if (output.commands[i].assetBundleObjects[j].serializationObject != refCount.Key)
+                        continue;
+                    
+                    output.commands[i].assetBundleObjects.Swap(j, --end);
+                }
+                Array.Resize(ref output.commands[i].assetBundleObjects, end);
+                Array.Sort(output.commands[i].assetBundleObjects, kSerializationInfoComparer);
             }
             
             // Cache results
@@ -114,7 +167,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             return true;
         }
 
-        public bool LoadFromCache(Hash128 hash, out BuildCommandSet output)
+        private bool LoadFromCache(Hash128 hash, out BuildCommandSet output)
         {
             if (BuildCache.TryLoadCachedResults(hash, out output))
                 return true;
@@ -124,6 +177,15 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
         private void SaveToCache(Hash128 hash, BuildCommandSet output)
         {
             BuildCache.SaveCachedResults(hash, output);
+        }
+
+        private bool IsAssetSprite(ref BuildCommandSet.AssetLoadInfo asset)
+        {
+            if (asset.referencedObjects.IsNullOrEmpty())
+                return false;
+            if (string.IsNullOrEmpty(asset.referencedObjects[0].filePath))
+                return false;
+            return asset.referencedObjects[0].filePath.StartsWith(kUnityAtlasCachePath);
         }
     }
 }

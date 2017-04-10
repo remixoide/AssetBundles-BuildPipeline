@@ -3,25 +3,46 @@ using UnityEditor.Experimental.Build.AssetBundle;
 
 namespace UnityEditor.Build.Utilities
 {
-    public class SerializationInfoComparer : IComparer<BuildCommandSet.SerializationInfo>
+    public static class CompareFuncs
     {
-        public int Compare(BuildCommandSet.SerializationInfo x, BuildCommandSet.SerializationInfo y)
+        public static int Compare(ObjectIdentifier x, ObjectIdentifier y)
+        {
+            if (x.guid != y.guid)
+                return x.guid.CompareTo(y.guid);
+
+            // Notes: Only if both guids are invalid, we should check path first
+            var empty = new GUID();
+            if (x.guid == empty && y.guid == empty)
+                return x.filePath.CompareTo(y.filePath);
+
+            if (x.localIdentifierInFile != y.localIdentifierInFile)
+                return x.localIdentifierInFile.CompareTo(y.localIdentifierInFile);
+
+            return x.fileType.CompareTo(y.fileType);
+        }
+
+        public static int Compare(BuildCommandSet.SerializationInfo x, BuildCommandSet.SerializationInfo y)
         {
             if (x.serializationIndex != y.serializationIndex)
                 return x.serializationIndex.CompareTo(y.serializationIndex);
 
-            if (x.serializationObject.guid != y.serializationObject.guid)
-                return x.serializationObject.guid.CompareTo(y.serializationObject.guid);
-            
-            // Notes: Only if both guids are invalid, we should check path first
-            var empty = new GUID();
-            if (x.serializationObject.guid == empty && y.serializationObject.guid == empty)
-                return x.serializationObject.filePath.CompareTo(y.serializationObject.filePath);
+            return Compare(x.serializationObject, y.serializationObject);
+        }
+    }
 
-            if (x.serializationObject.localIdentifierInFile != y.serializationObject.localIdentifierInFile)
-                return x.serializationObject.localIdentifierInFile.CompareTo(y.serializationObject.localIdentifierInFile);
+    public class SerializationInfoComparer : IComparer<BuildCommandSet.SerializationInfo>
+    {
+        public int Compare(BuildCommandSet.SerializationInfo x, BuildCommandSet.SerializationInfo y)
+        {
+            return CompareFuncs.Compare(x, y);
+        }
+    }
 
-            return x.serializationObject.fileType.CompareTo(y.serializationObject.fileType);
+    public class ObjectIdentifierComparer : IComparer<ObjectIdentifier>
+    {
+        public int Compare(ObjectIdentifier x, ObjectIdentifier y)
+        {
+            return CompareFuncs.Compare(x, y);
         }
     }
 }
