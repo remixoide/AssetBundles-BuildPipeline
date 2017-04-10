@@ -34,13 +34,21 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
     public class Unity5ManifestWriter : IDataConverter<BuildCommandSet, BuildOutput, uint[], string, string[]>
     {
+        public uint Version { get { return 1; } }
+
         public Hash128 CalculateInputHash(BuildCommandSet commands, BuildOutput output, uint[] crcs, string outputFolder)
         {
-            return HashingMethods.CalculateMD5Hash(commands, output, crcs);
+            return HashingMethods.CalculateMD5Hash(Version, commands, output, crcs);
         }
 
-        public bool Convert(BuildCommandSet commands, BuildOutput output, uint[] crcs, string outputFolder, out string[] manifestFiles)
+        public bool Convert(BuildCommandSet commands, BuildOutput output, uint[] crcs, string outputFolder, out string[] manifestFiles, bool useCache = true)
         {
+            // If enabled, try loading from cache
+            var hash = CalculateInputHash(commands, output, crcs, outputFolder);
+            if (useCache && LoadFromCache(hash, outputFolder, out manifestFiles))
+                return true;
+            
+            // Convert inputs
             var manifests = new List<string>();
             if (output.results.IsNullOrEmpty())
             {
@@ -55,7 +63,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             for (var i = 0; i < output.results.Length; i++)
             {
                 var manifestPath = GetManifestFilePath(output.results[i].assetBundleName, outputFolder);
-                manifests.Add(Path.GetFileName(manifestPath));
+                manifests.Add(string.Format("{0}.manifest", output.results[i].assetBundleName));
                 using (var stream = new StreamWriter(manifestPath))
                 {
                     // TODO: Implement assetFileHash, typeTreeHash, and includedTypes at LLAPI or HLAPI
@@ -114,34 +122,40 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             }
 
             manifestFiles = manifests.ToArray();
+            
+            // Cache results
+            if (useCache)
+                SaveToCache(hash, outputFolder, manifestFiles);
             return true;
         }
 
-        public bool LoadFromCacheOrConvert(BuildCommandSet input, BuildOutput output, uint[] crc, string outputFolder, out string[] manifestFiles)
+        private bool LoadFromCache(Hash128 hash, string outputFolder, out string[] manifestFiles)
         {
             string rootCachePath;
             string[] artifactPaths;
 
             // TODO: Probably can skip caching the results as it is equal to artifact paths
-            var hash = CalculateInputHash(input, output, crc, outputFolder);
-            if (BuildCache.TryLoadCahcedResultsAndArtifacts(hash, out manifestFiles, out artifactPaths, out rootCachePath))
+            if (BuildCache.TryLoadCachedArtifacts(hash, out artifactPaths, out rootCachePath))
             {
                 // TODO: Prepare settings.outputFolder
                 Directory.CreateDirectory(outputFolder);
 
-                foreach (var artifact in artifactPaths)
+                manifestFiles = new string[artifactPaths.Length];
+                for (var i = 0; i < artifactPaths.Length; i++)
                 {
-                    var file = new FileInfo(artifact);
-                    file.CopyTo(artifact.Replace(rootCachePath, outputFolder), true);
+                    File.Copy(artifactPaths[i], artifactPaths[i].Replace(rootCachePath, outputFolder), true);
+                    manifestFiles[i] = artifactPaths[i].Replace(rootCachePath, "");
                 }
                 return true;
             }
 
-            if (!Convert(input, output, crc, outputFolder, out manifestFiles))
-                return false;
+            manifestFiles = null;
+            return false;
+        }
 
-            BuildCache.SaveCachedResultsAndArtifacts(hash, manifestFiles, manifestFiles, outputFolder);
-            return true;
+        private void SaveToCache(Hash128 hash, string outputFolder, string[] manifestFiles)
+        {
+            BuildCache.SaveCachedArtifacts(hash, manifestFiles, outputFolder);
         }
 
         private static string GetManifestFilePath(string bundleName, string outputFolder)

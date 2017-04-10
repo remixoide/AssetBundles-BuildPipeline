@@ -59,7 +59,7 @@ namespace UnityEditor.Build.Cache
             return true;
         }
 
-        public static bool TryLoadCahcedResultsAndArtifacts<T>(Hash128 hash, out T results, out string[] artifactPaths, out string rootCachePath)
+        public static bool TryLoadCachedResultsAndArtifacts<T>(Hash128 hash, out T results, out string[] artifactPaths, out string rootCachePath)
         {
             artifactPaths = null;
             rootCachePath = GetPathForCachedArtifacts(hash);
@@ -97,9 +97,9 @@ namespace UnityEditor.Build.Cache
                 Directory.CreateDirectory(path);
                 foreach (var artifact in artifactPaths)
                 {
-                    var file = new FileInfo(string.Format("{0}/{1}", rootPath, artifact));
-                    if (file.Exists)
-                        file.CopyTo(string.Format("{0}/{1}", path, artifact), true);
+                    var source = string.Format("{0}/{1}", rootPath, artifact);
+                    if (File.Exists(source))
+                        File.Copy(source, string.Format("{0}/{1}", path, artifact), true);
                     else
                         BuildLogger.LogWarning("Unable to find source file '{0}' to add to the build cache.", artifact);
                 }

@@ -15,13 +15,21 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
         private static readonly SerializationInfoComparer kCompareer = new SerializationInfoComparer();
 
+        public uint Version { get { return 1; } }
+
         public Hash128 CalculateInputHash(BuildCommandSet input)
         {
-            return HashingMethods.CalculateMD5Hash(input);
+            return HashingMethods.CalculateMD5Hash(Version, input);
         }
 
-        public bool Convert(BuildCommandSet input, out BuildCommandSet output)
+        public bool Convert(BuildCommandSet input, out BuildCommandSet output, bool useCache = true)
         {
+            // If enabled, try loading from cache
+            var hash = CalculateInputHash(input);
+            if (useCache && LoadFromCache(hash, out output))
+                return true;
+            
+            // Convert inputs
             output = input;
 
             if (input.commands.IsNullOrEmpty())
@@ -98,21 +106,23 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 output.commands[i].assetBundleDependencies = dependencies.OrderBy(s => s).ToArray();
                 dependencies.Clear();
             }
-
+            
+            // Cache results
+            if (useCache)
+                SaveToCache(hash, output);
             return true;
         }
 
-        public bool LoadFromCacheOrConvert(BuildCommandSet input, out BuildCommandSet output)
+        public bool LoadFromCache(Hash128 hash, out BuildCommandSet output)
         {
-            var hash = CalculateInputHash(input);
             if (BuildCache.TryLoadCachedResults(hash, out output))
                 return true;
+            return false;
+        }
 
-            if (!Convert(input, out output))
-                return false;
-
+        private void SaveToCache(Hash128 hash, BuildCommandSet output)
+        {
             BuildCache.SaveCachedResults(hash, output);
-            return true;
         }
     }
 }

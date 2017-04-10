@@ -34,7 +34,7 @@ namespace UnityEditor.Build.AssetBundle
             // Generate command set
             BuildCommandSet commands;
             var packer = new Unity5Packer();
-            if (!packer.LoadFromCacheOrConvert(input, settings.target, out commands))
+            if (!packer.Convert(input, settings.target, out commands))
                 return;
 
             //DebugPrintCommandSet(ref commands);
@@ -42,7 +42,7 @@ namespace UnityEditor.Build.AssetBundle
             // Calculate dependencies
             BuildCommandSet depCommands;
             var dependencyCalculator = new Unity5DependencyCalculator();
-            if (!dependencyCalculator.LoadFromCacheOrConvert(commands, out depCommands))
+            if (!dependencyCalculator.Convert(commands, out depCommands))
                 return;
             
             //DebugPrintCommandSet(ref commands);
@@ -52,19 +52,19 @@ namespace UnityEditor.Build.AssetBundle
             // Write out resource files
             BuildOutput output;
             var resourceWriter = new ResourceWriter();
-            if (!resourceWriter.LoadFromCacheOrConvert(depCommands, settings, out output))
+            if (!resourceWriter.Convert(depCommands, settings, out output))
                 return;
 
             // Archive and compress resource files
             uint[] crc;
             var archiveWriter = new ArchiveWriter();
-            if (!archiveWriter.LoadFromCacheOrConvert(output, compression, settings.outputFolder, out crc))
+            if (!archiveWriter.Convert(output, compression, settings.outputFolder, out crc))
                 return;
 
             // Generate Unity5 compatible manifest files
             string[] manifestfiles;
             var manifestWriter = new Unity5ManifestWriter();
-            if (!manifestWriter.LoadFromCacheOrConvert(depCommands, output, crc, settings.outputFolder, out manifestfiles))
+            if (!manifestWriter.Convert(depCommands, output, crc, settings.outputFolder, out manifestfiles))
                 return;
             
             BuildLogger.Log("Built Asset Bundles");

@@ -10,6 +10,8 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 {
     public class Unity5Packer : IDataConverter<BuildInput, BuildTarget, BuildCommandSet>
     {
+        public uint Version { get { return 1; } }
+
         private static readonly SerializationInfoComparer kCompareer = new SerializationInfoComparer();
         
         public Hash128 CalculateInputHash(BuildInput input, BuildTarget target)
@@ -33,11 +35,17 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 }
             }
 
-            return HashingMethods.CalculateMD5Hash(input, target, assetHashes);
+            return HashingMethods.CalculateMD5Hash(Version, input, target, assetHashes);
         }
 
-        public bool Convert(BuildInput input, BuildTarget target, out BuildCommandSet output)
+        public bool Convert(BuildInput input, BuildTarget target, out BuildCommandSet output, bool useCache = true)
         {
+            // If enabled, try loading from cache
+            var hash = CalculateInputHash(input, target);
+            if (useCache && LoadFromCache(hash, out output))
+                return true;
+            
+            // Convert inputs
             output = new BuildCommandSet();
 
             if (input.definitions.IsNullOrEmpty())
@@ -82,21 +90,21 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 Array.Sort(output.commands[o].assetBundleObjects, kCompareer);
             }
             Array.Resize(ref output.commands, o + 1);
-
+            
+            // Cache results
+            if (useCache)
+                SaveToCache(hash, output);
             return true;
         }
 
-        public bool LoadFromCacheOrConvert(BuildInput input, BuildTarget target, out BuildCommandSet output)
+        private bool LoadFromCache(Hash128 hash, out BuildCommandSet output)
         {
-            var hash = CalculateInputHash(input, target);
-            if (BuildCache.TryLoadCachedResults(hash, out output))
-                return true;
+            return BuildCache.TryLoadCachedResults(hash, out output);
+        }
 
-            if (!Convert(input, target, out output))
-                return false;
-
+        private void SaveToCache(Hash128 hash, BuildCommandSet output)
+        {
             BuildCache.SaveCachedResults(hash, output);
-            return true;
         }
 
         private static long CalculateSerializationIndexFromObjectIdentifier(ObjectIdentifier objectID)

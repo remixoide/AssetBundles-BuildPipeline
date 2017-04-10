@@ -7,13 +7,21 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 {
     public class AddressableAssetPacker : IDataConverter<BuildInput.AddressableAsset[], BuildInput>
     {
-        public Hash128 CalculateInputHash(BuildInput.AddressableAsset[] input)
+        public uint Version { get { return 1; } }
+
+        private Hash128 CalculateInputHash(BuildInput.AddressableAsset[] input)
         {
-            return HashingMethods.CalculateMD5Hash(input);
+            return HashingMethods.CalculateMD5Hash(Version, input);
         }
 
-        public bool Convert(BuildInput.AddressableAsset[] input, out BuildInput output)
+        public bool Convert(BuildInput.AddressableAsset[] input, out BuildInput output, bool useCache = true)
         {
+            // If enabled, try loading from cache
+            var hash = CalculateInputHash(input);
+            if (useCache && LoadFromCache(hash, out output))
+                return true;
+            
+            // Convert inputs
             output = new BuildInput();
 
             if (input.IsNullOrEmpty())
@@ -28,20 +36,21 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 output.definitions[index].assetBundleName = input[index].asset.ToString();
                 output.definitions[index].explicitAssets = new[] { input[index] };
             }
+            
+            // Cache results
+            if (useCache)
+                SaveToCache(hash, output);
             return true;
         }
 
-        public bool LoadFromCacheOrConvert(BuildInput.AddressableAsset[] input, out BuildInput output)
+        private bool LoadFromCache(Hash128 hash, out BuildInput output)
         {
-            var hash = CalculateInputHash(input);
-            if (BuildCache.TryLoadCachedResults(hash, out output))
-                return true;
+            return BuildCache.TryLoadCachedResults(hash, out output);
+        }
 
-            if (!Convert(input, out output))
-                return false;
-
+        private void SaveToCache(Hash128 hash, BuildInput output)
+        {
             BuildCache.SaveCachedResults(hash, output);
-            return true;
         }
     }
 }

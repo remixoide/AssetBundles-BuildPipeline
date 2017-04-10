@@ -9,21 +9,23 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 {
     public class ResourceWriter : IDataConverter<BuildCommandSet, BuildSettings, BuildOutput>
     {
-        public Hash128 CalculateInputHash(BuildCommandSet commandSet, BuildSettings settings)
+        public uint Version { get { return 1; } }
+
+        public Hash128 CalculateInputHash(BuildCommandSet commands, BuildSettings settings)
         {
             // TODO: Figure out if explicitAssets hash is not enough and we need use assetBundleObjects instead
             var assetHashes = new List<string>();
-            if (!commandSet.commands.IsNullOrEmpty())
+            if (!commands.commands.IsNullOrEmpty())
             {
-                for (var i = 0; i < commandSet.commands.Length; i++)
+                for (var i = 0; i < commands.commands.Length; i++)
                 {
-                    if (commandSet.commands[i].explicitAssets.IsNullOrEmpty())
+                    if (commands.commands[i].explicitAssets.IsNullOrEmpty())
                         continue;
 
-                    for (var k = 0; k < commandSet.commands[i].explicitAssets.Length; k++)
+                    for (var k = 0; k < commands.commands[i].explicitAssets.Length; k++)
                     {
                         // TODO: Create GUIDToAssetPath that takes GUID struct
-                        var path = AssetDatabase.GUIDToAssetPath(commandSet.commands[i].explicitAssets[k].asset.ToString());
+                        var path = AssetDatabase.GUIDToAssetPath(commands.commands[i].explicitAssets[k].asset.ToString());
                         var hash = AssetDatabase.GetAssetDependencyHash(path);
                         // TODO: Figure out a way to not create a string for every hash.
                         assetHashes.Add(hash.ToString());
@@ -31,12 +33,18 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 }
             }
 
-            return HashingMethods.CalculateMD5Hash(commandSet, settings.target, settings.group, settings.editorBundles, assetHashes);
+            return HashingMethods.CalculateMD5Hash(Version, commands, settings.target, settings.group, settings.editorBundles, assetHashes);
         }
 
-        public bool Convert(BuildCommandSet commandSet, BuildSettings settings, out BuildOutput output)
+        public bool Convert(BuildCommandSet commands, BuildSettings settings, out BuildOutput output, bool useCache = true)
         {
-            foreach (var bundle in commandSet.commands)
+            // If enabled, try loading from cache
+            var hash = CalculateInputHash(commands, settings);
+            if (useCache && LoadFromCache(hash, settings.outputFolder, out output))
+                return true;
+
+            // Convert inputs
+            foreach (var bundle in commands.commands)
             {
                 // TODO: Reduce copying of value tyeps
                 if (ValidateCommand(bundle))
@@ -51,41 +59,41 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             // TODO: Prepare settings.outputFolder
             Directory.CreateDirectory(settings.outputFolder);
 
-            output = BuildInterface.WriteResourceFiles(commandSet, settings);
+            output = BuildInterface.WriteResourceFiles(commands, settings);
+            
+            // Cache results
+            if (useCache)
+                SaveToCache(hash, output, settings.outputFolder);
             // TODO: Change this return based on if WriteResourceFiles was successful or not - Need public BuildReporting
             return true;
         }
 
-        public bool LoadFromCacheOrConvert(BuildCommandSet input, BuildSettings settings, out BuildOutput output)
+        private bool LoadFromCache(Hash128 hash, string outputFolder, out BuildOutput output)
         {
             string rootCachePath;
             string[] artifactPaths;
-
-            var hash = CalculateInputHash(input, settings);
-            if (BuildCache.TryLoadCahcedResultsAndArtifacts(hash, out output, out artifactPaths, out rootCachePath))
+            
+            if (BuildCache.TryLoadCachedResultsAndArtifacts(hash, out output, out artifactPaths, out rootCachePath))
             {
                 // TODO: Prepare settings.outputFolder
-                Directory.CreateDirectory(settings.outputFolder);
+                Directory.CreateDirectory(outputFolder);
 
                 foreach (var artifact in artifactPaths)
-                {
-                    var file = new FileInfo(artifact);
-                    file.CopyTo(artifact.Replace(rootCachePath, settings.outputFolder), true);
-                }
+                    File.Copy(artifact, artifact.Replace(rootCachePath, outputFolder), true);
                 return true;
             }
+            return false;
+        }
 
-            if (!Convert(input, settings, out output))
-                return false;
-           
+        private void SaveToCache(Hash128 hash, BuildOutput output, string outputFolder)
+        {
             var artifacts = new List<string>();
             for (var i = 0; i < output.results.Length; i++)
             {
                 for (var j = 0; j < output.results[i].resourceFiles.Length; j++)
                     artifacts.Add(Path.GetFileName(output.results[i].resourceFiles[j].fileName));
             }
-            BuildCache.SaveCachedResultsAndArtifacts(hash, output, artifacts.ToArray(), settings.outputFolder);
-            return true;
+            BuildCache.SaveCachedResultsAndArtifacts(hash, output, artifacts.ToArray(), outputFolder);
         }
 
         private bool ValidateCommand(BuildCommandSet.Command bundle)
