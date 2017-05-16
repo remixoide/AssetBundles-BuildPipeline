@@ -86,7 +86,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                     output.commands[o].assetBundleObjects[k].serializationIndex = CalculateSerializationIndexFromObjectIdentifier(objectID);
                     k++;
                 }
-                // Sorting is unneccessary - just makes it more human readable
+                // Sorting is unnecessary - just makes it more human readable
                 Array.Sort(output.commands[o].assetBundleObjects, kCompareer);
             }
             Array.Resize(ref output.commands, o + 1);
@@ -107,7 +107,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             BuildCache.SaveCachedResults(hash, output);
         }
 
-        private static long CalculateSerializationIndexFromObjectIdentifier(ObjectIdentifier objectID)
+        public static long CalculateSerializationIndexFromObjectIdentifier(ObjectIdentifier objectID)
         {
             byte[] bytes;
             var md4 = MD4.Create();
