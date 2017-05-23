@@ -57,7 +57,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             {
                 if (string.IsNullOrEmpty(output.commands[i].assetBundleName))
                 {
-                    BuildLogger.LogError("Unable to continue dependency calcualtion. Asset bundle name is null or empty!");
+                    BuildLogger.LogError("Unable to continue dependency calculation. Asset bundle name is null or empty!");
                     return false;
                 }
 
@@ -74,7 +74,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                     {
                         if (bundleName == output.commands[i].assetBundleName)
                             continue;
-                        BuildLogger.LogError("Unable to continue dependency calcualtion. Asset '{0}' added to multiple bundles: '{1}', ,'{2}'!", 
+                        BuildLogger.LogError("Unable to continue dependency calculation. Asset '{0}' added to multiple bundles: '{1}', ,'{2}'!", 
                             output.commands[i].explicitAssets[j].asset, bundleName, output.commands[i].assetBundleName);
                         return false;
                     }
@@ -87,7 +87,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 }
             }
 
-            var dependencies = new HashSet<string>();
+            var assetBundleDependencies = new HashSet<string>();
             for (var i = 0; i < output.commands.Length; i++)
             {
                 if (output.commands[i].assetBundleObjects.IsNullOrEmpty())
@@ -126,14 +126,14 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                         continue;
                     }
 
-                    dependencies.Add(dependency);
+                    assetBundleDependencies.Add(dependency);
                     output.commands[i].assetBundleObjects.Swap(j, --end);
                 }
                 Array.Resize(ref output.commands[i].assetBundleObjects, end);
-                // Sorting is unneccessary - just makes it more human readable
+                // Sorting is unnecessary - just makes it more human readable
                 Array.Sort(output.commands[i].assetBundleObjects, kSerializationInfoComparer);
-                output.commands[i].assetBundleDependencies = dependencies.OrderBy(s => s).ToArray();
-                dependencies.Clear();
+                output.commands[i].assetBundleDependencies = assetBundleDependencies.OrderBy(s => s).ToArray();
+                assetBundleDependencies.Clear();
             }
 
             // Remove source textures if no references

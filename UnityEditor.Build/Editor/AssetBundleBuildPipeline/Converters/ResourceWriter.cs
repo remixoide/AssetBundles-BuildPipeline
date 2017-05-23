@@ -126,6 +126,13 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                         return false;
                     }
 
+                    if (!string.IsNullOrEmpty(bundle.processedScene) && serializedInfo.serializationIndex == 2)
+                    {
+                        BuildLogger.LogError("Unable to continue resource writing. Asset bundle '{0}' has a serialized object with index of '1'. This is a reserved index and can not be used.",
+                            bundle.assetBundleName);
+                        return false;
+                    }
+
                     if (!localIDs.Add(serializedInfo.serializationIndex))
                     {
                         BuildLogger.LogError("Unable to continue resource writing. Asset bundle '{0}' has multiple serialized objects with the same index '{1}'. Each serialized object must have a unique index.",

@@ -22,7 +22,7 @@ namespace UnityEditor.Build.Cache
             return string.Format("{0}/{1}/{2}/Artifacts", kCachePath, file.Substring(0, 2), file);
         }
 
-        [MenuItem("AssetBundles/Purge Build Cache")]
+        [MenuItem("AssetBundles/Purge Build Cache", priority = 10)]
         public static void PurgeCache()
         {
             if (!EditorUtility.DisplayDialog("Purge Build Cache", "Do you really want to purge your entire build cache?", "Yes", "No"))

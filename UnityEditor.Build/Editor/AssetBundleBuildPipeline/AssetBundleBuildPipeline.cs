@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
+using System.IO;
 using System.Text;
 using UnityEditor.Build.AssetBundle.DataConverters;
 using UnityEditor.Build.Utilities;
@@ -18,6 +19,37 @@ namespace UnityEditor.Build.AssetBundle
             return settings;
         }
 
+        [MenuItem("AssetBundles/Prepare Test Scene", priority = 1)]
+        public static void PrepareTestScene()
+        {
+            var buildTimer = new Stopwatch();
+            buildTimer.Start();
+
+            var settings = GenerateBuildSettings();
+            var compression = BuildCompression.DefaultUncompressed;
+
+            SceneLoadInfo sceneInfo;
+            var prepareScene = new PrepareScene();
+            var success = prepareScene.Convert("Assets/Debug/TestScene.unity", settings, out sceneInfo, false);
+
+            BuildCommandSet commands;
+            var packer = new ScenePacker();
+            success &= packer.Convert(sceneInfo, out commands, false);
+
+            //DebugPrintCommandSet(ref commands);
+
+            BuildOutput output;
+            var resourceWriter = new ResourceWriter();
+            success &= resourceWriter.Convert(commands, settings, out output, false);
+
+            uint[] crc;
+            var archiveWriter = new ArchiveWriter();
+            success &= archiveWriter.Convert(output, compression, settings.outputFolder, out crc, false);
+
+            buildTimer.Stop();
+            BuildLogger.Log("Prepare Test Scene {0} in: {1:c}", success ? "completed" : "failed", buildTimer.Elapsed);
+        }
+
         public static bool BuildAssetBundles(BuildSettings settings, BuildInput input, out BuildOutput output)
         {
             var buildTimer = new Stopwatch();
@@ -26,7 +58,7 @@ namespace UnityEditor.Build.AssetBundle
             output = new BuildOutput();
             var compression = BuildCompression.DefaultUncompressed;
 
-            // Rebuild sprite atlas cache for correct dependency calculation & writting
+            // Rebuild sprite atlas cache for correct dependency calculation & writing
             Packer.RebuildAtlasCacheIfNeeded(settings.target, true, Packer.Execution.Normal);
 
             // Generate command set
@@ -37,13 +69,13 @@ namespace UnityEditor.Build.AssetBundle
 
             //DebugPrintCommandSet(ref commands);
 
-            // Calculate dependencies
+            // Calculate assetBundleDependencies
             BuildCommandSet depCommands;
             var dependencyCalculator = new Unity5DependencyCalculator();
             if (!dependencyCalculator.Convert(commands, out depCommands))
                 return false;
-            
-            DebugPrintCommandSet(ref depCommands);
+
+            //DebugPrintCommandSet(ref depCommands);
 
             // TODO: implement incremental building when LLAPI supports it
 
@@ -63,63 +95,62 @@ namespace UnityEditor.Build.AssetBundle
             var manifestWriter = new Unity5ManifestWriter();
             if (!manifestWriter.Convert(depCommands, output, crc, settings.outputFolder, out manifestfiles))
                 return false;
-            
-            buildTimer.Stop();
-            BuildLogger.Log("Build Asset Bundles complete in: {0:c}", buildTimer.Elapsed);
 
             return true;
         }
 
         private static void DebugPrintCommandSet(ref BuildCommandSet commandSet)
         {
+            var stream = new StreamWriter("C:/Projects/AssetBundlesHLAPI/DebugPrint.log", false);
             // TODO: this debug printing function is ugly as sin, fix it
-            var msg = new StringBuilder();
+            //var msg = new StringBuilder();
             if (!commandSet.commands.IsNullOrEmpty())
             {
                 foreach (var bundle in commandSet.commands)
                 {
-                    msg.AppendFormat("Bundle: '{0}'\n", bundle.assetBundleName);
+                    stream.Write("Bundle: '{0}'\n", bundle.assetBundleName);
                     if (!bundle.explicitAssets.IsNullOrEmpty())
                     {
-                        msg.Append("\tExplicit Assets:\n");
+                        stream.Write("\tExplicit Assets:\n");
                         foreach (var asset in bundle.explicitAssets)
                         {
                             // TODO: Create GUIDToAssetPath that takes GUID struct
                             var addressableName = string.IsNullOrEmpty(asset.address) ? AssetDatabase.GUIDToAssetPath(asset.asset.ToString()) : asset.address;
-                            msg.AppendFormat("\t\tAsset: {0} - '{1}'\n", asset.asset, addressableName);
+                            stream.Write("\t\tAsset: {0} - '{1}'\n", asset.asset, addressableName);
                             if (!asset.includedObjects.IsNullOrEmpty())
                             {
-                                msg.Append("\t\t\tIncluded Objects:\n");
+                                stream.Write("\t\t\tIncluded Objects:\n");
                                 foreach (var obj in asset.includedObjects)
-                                    msg.AppendFormat("\t\t\t\t{0}\n", obj);
+                                    stream.Write("\t\t\t\t{0}\n", obj);
                             }
 
                             if (!asset.referencedObjects.IsNullOrEmpty())
                             {
-                                msg.Append("\t\t\tReferenced Objects:\n");
+                                stream.Write("\t\t\tReferenced Objects:\n");
                                 foreach (var obj in asset.referencedObjects)
-                                    msg.AppendFormat("\t\t\t\t{0}\n", obj);
+                                    stream.Write("\t\t\t\t{0}\n", obj);
                             }
                         }
                     }
 
                     if (!bundle.assetBundleObjects.IsNullOrEmpty())
                     {
-                        msg.Append("\tAsset Bundle Objects:\n");
+                        stream.Write("\tAsset Bundle Objects:\n");
                         foreach (var obj in bundle.assetBundleObjects)
-                            msg.AppendFormat("\t\t{0}: {1}\n", obj.serializationIndex, obj.serializationObject);
+                           stream.Write("\t\t{0}: {1}\n", obj.serializationIndex, obj.serializationObject);
                     }
 
                     if (!bundle.assetBundleDependencies.IsNullOrEmpty())
                     {
-                        msg.Append("\tAsset Bundle Dependencies:\n");
+                        stream.Write("\tAsset Bundle Dependencies:\n");
                         foreach (var dependency in bundle.assetBundleDependencies)
-                            msg.AppendFormat("\t\t{0}\n", dependency);
+                            stream.Write("\t\t{0}\n", dependency);
                     }
-                    msg.Append("\n");
+                    stream.Write("\n");
                 }
             }
-            BuildLogger.Log(msg);
+            //BuildLogger.Log(msg);
+            stream.Close();
         }
     }
 }
