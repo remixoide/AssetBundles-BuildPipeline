@@ -30,7 +30,6 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             var scene = new BuildCommandSet.Command();
             scene.assetBundleName = Path.GetFileNameWithoutExtension(input.scene);
             scene.assetBundleObjects = referencedObjects.ToArray();
-            //scene.assetBundleDependencies
             scene.explicitAssets = new[] { sceneLoadInfo };
             scene.scene = input.scene;
             scene.processedScene = input.processedScene;

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Collections.Generic;
 using UnityEditor.Build.AssetBundle.DataConverters;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
@@ -19,7 +20,6 @@ namespace UnityEditor.Build.AssetBundle
             return settings;
         }
 
-        [MenuItem("AssetBundles/Prepare Test Scene", priority = 1)]
         public static void PrepareTestScene()
         {
             var buildTimer = new Stopwatch();
@@ -61,18 +61,54 @@ namespace UnityEditor.Build.AssetBundle
             // Rebuild sprite atlas cache for correct dependency calculation & writing
             Packer.RebuildAtlasCacheIfNeeded(settings.target, true, Packer.Execution.Normal);
 
-            // Generate command set
-            BuildCommandSet commands;
+            BuildCommandSet allCommands = new BuildCommandSet();
+            allCommands.commands = new BuildCommandSet.Command[0];
+
+            BuildCommandSet sceneCommands = new BuildCommandSet();
+            sceneCommands.commands = new BuildCommandSet.Command[0];
+
+            var prepareScene = new PrepareScene();
+            var scenePacker = new ScenePacker();
+             
+            // Generate command set for scenes
+            for(var x = 0; x < input.definitions.Length; x++)
+            {
+                var def = input.definitions[x];
+                if(def.explicitAssets.Length > 0)
+                {
+                    var assetPath = AssetDatabase.GUIDToAssetPath(def.explicitAssets[0].asset.ToString());
+                    if(assetPath.EndsWith(".unity"))
+                    {
+                        SceneLoadInfo sceneInfo;
+                        var success = prepareScene.Convert(assetPath, settings, out sceneInfo, false);
+
+                        BuildCommandSet iterSceneCommands;
+                        if(!scenePacker.Convert(sceneInfo, out iterSceneCommands, false))
+                            return false;
+
+                        ArrayUtility.AddRange<BuildCommandSet.Command>(ref sceneCommands.commands, iterSceneCommands.commands);
+                        ArrayUtility.RemoveAt<BuildInput.Definition>(ref input.definitions, x--);
+                    }
+                }
+            }
+
+            // Generate command set for loose assets
+            BuildCommandSet assetCommands;
             var packer = new Unity5Packer();
-            if (!packer.Convert(input, settings.target, out commands))
+            if (!packer.Convert(input, settings.target, out assetCommands))
                 return false;
 
-            //DebugPrintCommandSet(ref commands);
+            // Mash up all of the command sets
+            if(sceneCommands.commands.Length > 0)
+                ArrayUtility.AddRange(ref allCommands.commands, sceneCommands.commands);
+
+            if(assetCommands.commands.Length > 0)
+                ArrayUtility.AddRange(ref allCommands.commands, assetCommands.commands);
 
             // Calculate assetBundleDependencies
             BuildCommandSet depCommands;
             var dependencyCalculator = new Unity5DependencyCalculator();
-            if (!dependencyCalculator.Convert(commands, out depCommands))
+            if (!dependencyCalculator.Convert(allCommands, out depCommands))
                 return false;
 
             //DebugPrintCommandSet(ref depCommands);
