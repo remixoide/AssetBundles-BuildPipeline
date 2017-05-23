@@ -33,7 +33,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 }
             }
 
-            return HashingMethods.CalculateMD5Hash(Version, commands, settings.target, settings.group, settings.editorBundles, assetHashes);
+            return HashingMethods.CalculateMD5Hash(Version, commands, settings.target, settings.group, settings.typeDB, assetHashes);
         }
 
         public bool Convert(BuildCommandSet commands, BuildSettings settings, out BuildOutput output, bool useCache = true)

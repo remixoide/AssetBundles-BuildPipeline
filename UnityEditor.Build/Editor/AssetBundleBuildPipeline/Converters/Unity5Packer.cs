@@ -77,7 +77,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                     allObjectIDs.UnionWith(output.commands[i].explicitAssets[j].includedObjects);
                     allObjectIDs.UnionWith(output.commands[i].explicitAssets[j].referencedObjects);
                 }
-                
+
                 var k = 0;
                 output.commands[o].assetBundleObjects = new BuildCommandSet.SerializationInfo[allObjectIDs.Count];
                 foreach (var objectID in allObjectIDs)

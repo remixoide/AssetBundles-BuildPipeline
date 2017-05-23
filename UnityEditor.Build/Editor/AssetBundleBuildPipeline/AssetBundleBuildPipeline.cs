@@ -15,25 +15,15 @@ namespace UnityEditor.Build.AssetBundle
             settings.target = EditorUserBuildSettings.activeBuildTarget;
             settings.group = EditorUserBuildSettings.selectedBuildTargetGroup;
             settings.outputFolder = "AssetBundles/" + settings.target;
-            // Example: Point this to the dll's of previous player build
-            // TODO: improve this, certain platforms don't have dll's after a player build (IL2CPP, Android, etc)
-            //settings.scriptsFolder = "Build/Player_Data/Managed";
-            settings.editorBundles = false;
             return settings;
         }
 
-        public static bool BuildAssetBundles(BuildSettings settings, out BuildOutput output)
+        public static bool BuildAssetBundles(BuildSettings settings, BuildInput input, out BuildOutput output)
         {
             var buildTimer = new Stopwatch();
             buildTimer.Start();
 
             output = new BuildOutput();
-            //var input = BuildInterface.GenerateBuildInput();
-            BuildInput input;
-            var inputCalculator = new AddressableAssetPacker();
-            if(!inputCalculator.Convert(AddressableAssetSettings.GetDefault().GetEntries(), out input, false))
-                return false;
-
             var compression = BuildCompression.DefaultUncompressed;
 
             // Rebuild sprite atlas cache for correct dependency calculation & writting
