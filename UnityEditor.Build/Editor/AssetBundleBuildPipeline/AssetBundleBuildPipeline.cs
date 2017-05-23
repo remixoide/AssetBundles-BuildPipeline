@@ -22,14 +22,18 @@ namespace UnityEditor.Build.AssetBundle
             return settings;
         }
 
-        [MenuItem("AssetBundles/Build Asset Bundles")]
-        public static void BuildAssetBundles()
+        public static bool BuildAssetBundles(BuildSettings settings, out BuildOutput output)
         {
             var buildTimer = new Stopwatch();
             buildTimer.Start();
 
-            var input = BuildInterface.GenerateBuildInput();
-            var settings = GenerateBuildSettings();
+            output = new BuildOutput();
+            //var input = BuildInterface.GenerateBuildInput();
+            BuildInput input;
+            var inputCalculator = new AddressableAssetPacker();
+            if(!inputCalculator.Convert(AddressableAssetSettings.GetDefault().GetEntries(), out input, false))
+                return false;
+
             var compression = BuildCompression.DefaultUncompressed;
 
             // Rebuild sprite atlas cache for correct dependency calculation & writting
@@ -39,7 +43,7 @@ namespace UnityEditor.Build.AssetBundle
             BuildCommandSet commands;
             var packer = new Unity5Packer();
             if (!packer.Convert(input, settings.target, out commands))
-                return;
+                return false;
 
             //DebugPrintCommandSet(ref commands);
 
@@ -47,32 +51,33 @@ namespace UnityEditor.Build.AssetBundle
             BuildCommandSet depCommands;
             var dependencyCalculator = new Unity5DependencyCalculator();
             if (!dependencyCalculator.Convert(commands, out depCommands))
-                return;
+                return false;
             
             DebugPrintCommandSet(ref depCommands);
 
             // TODO: implement incremental building when LLAPI supports it
 
             // Write out resource files
-            BuildOutput output;
             var resourceWriter = new ResourceWriter();
             if (!resourceWriter.Convert(depCommands, settings, out output))
-                return;
+                return false;
 
             // Archive and compress resource files
             uint[] crc;
             var archiveWriter = new ArchiveWriter();
             if (!archiveWriter.Convert(output, compression, settings.outputFolder, out crc))
-                return;
+                return false;
 
             // Generate Unity5 compatible manifest files
             string[] manifestfiles;
             var manifestWriter = new Unity5ManifestWriter();
             if (!manifestWriter.Convert(depCommands, output, crc, settings.outputFolder, out manifestfiles))
-                return;
+                return false;
             
             buildTimer.Stop();
             BuildLogger.Log("Build Asset Bundles complete in: {0:c}", buildTimer.Elapsed);
+
+            return true;
         }
 
         private static void DebugPrintCommandSet(ref BuildCommandSet commandSet)

@@ -2,24 +2,29 @@
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
 using UnityEngine;
+using UnityEditor;
 
 namespace UnityEditor.Build.AssetBundle.DataConverters
 {
-    public class AddressableAssetPacker : IDataConverter<BuildInput.AddressableAsset[], BuildInput>
+    public class AddressableAssetPacker : IDataConverter<AddressableAssetEntry[], BuildInput>
     {
         public uint Version { get { return 1; } }
 
-        private Hash128 CalculateInputHash(BuildInput.AddressableAsset[] input)
+        private Hash128 CalculateInputHash(AddressableAssetEntry[] input)
         {
             return HashingMethods.CalculateMD5Hash(Version, input);
         }
 
-        public bool Convert(BuildInput.AddressableAsset[] input, out BuildInput output, bool useCache = true)
+        public bool Convert(AddressableAssetEntry[] input, out BuildInput output, bool useCache = true)
         {
             // If enabled, try loading from cache
-            var hash = CalculateInputHash(input);
-            if (useCache && LoadFromCache(hash, out output))
-                return true;
+            Hash128 hash = new Hash128();
+            if (useCache)
+            {
+                hash = CalculateInputHash(input);
+                if(LoadFromCache(hash, out output))
+                    return true;
+            }
             
             // Convert inputs
             output = new BuildInput();
@@ -33,8 +38,11 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             output.definitions = new BuildInput.Definition[input.Length];
             for (var index = 0; index < input.Length; index++)
             {
-                output.definitions[index].assetBundleName = input[index].asset.ToString();
-                output.definitions[index].explicitAssets = new[] { input[index] };
+                var entry = input[index];
+                var assetPath = AssetDatabase.GUIDToAssetPath(entry.guid.ToString());
+                var address = string.IsNullOrEmpty(entry.address) ? assetPath : entry.address;
+                output.definitions[index].assetBundleName = address;
+                output.definitions[index].explicitAssets = new[] { new BuildInput.AddressableAsset() { asset = entry.guid, address = address } };
             }
             
             // Cache results
