@@ -34,6 +34,9 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             for (var i = 0; i < output.results.Length; i++)
             {
                 var filePath = string.Format("{0}/{1}", outputFolder, output.results[i].assetBundleName);
+                var dir = Path.GetDirectoryName(filePath);
+                Directory.CreateDirectory(dir);
+
                 crc[i] = BuildInterface.ArchiveAndCompress(output.results[i].resourceFiles, filePath, compression);
             }
             

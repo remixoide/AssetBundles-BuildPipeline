@@ -20,36 +20,6 @@ namespace UnityEditor.Build.AssetBundle
             return settings;
         }
 
-        public static void PrepareTestScene()
-        {
-            var buildTimer = new Stopwatch();
-            buildTimer.Start();
-
-            var settings = GenerateBuildSettings();
-            var compression = BuildCompression.DefaultUncompressed;
-
-            SceneLoadInfo sceneInfo;
-            var prepareScene = new PrepareScene();
-            var success = prepareScene.Convert("Assets/Debug/TestScene.unity", settings, out sceneInfo, false);
-
-            BuildCommandSet commands;
-            var packer = new ScenePacker();
-            success &= packer.Convert(sceneInfo, out commands, false);
-
-            //DebugPrintCommandSet(ref commands);
-
-            BuildOutput output;
-            var resourceWriter = new ResourceWriter();
-            success &= resourceWriter.Convert(commands, settings, out output, false);
-
-            uint[] crc;
-            var archiveWriter = new ArchiveWriter();
-            success &= archiveWriter.Convert(output, compression, settings.outputFolder, out crc, false);
-
-            buildTimer.Stop();
-            BuildLogger.Log("Prepare Test Scene {0} in: {1:c}", success ? "completed" : "failed", buildTimer.Elapsed);
-        }
-
         public static bool BuildAssetBundles(BuildSettings settings, BuildInput input, out BuildOutput output)
         {
             var buildTimer = new Stopwatch();
@@ -61,15 +31,15 @@ namespace UnityEditor.Build.AssetBundle
             // Rebuild sprite atlas cache for correct dependency calculation & writing
             Packer.RebuildAtlasCacheIfNeeded(settings.target, true, Packer.Execution.Normal);
 
-            BuildCommandSet allCommands = new BuildCommandSet();
-            allCommands.commands = new BuildCommandSet.Command[0];
-
-            BuildCommandSet sceneCommands = new BuildCommandSet();
-            sceneCommands.commands = new BuildCommandSet.Command[0];
+            var commandList = new List<BuildCommandSet.Command>();
 
             var prepareScene = new PrepareScene();
             var scenePacker = new ScenePacker();
-             
+ 
+            var bundleOutputFolder = settings.outputFolder;
+            settings.outputFolder = Path.Combine(settings.outputFolder, "_resources");
+            Directory.CreateDirectory(settings.outputFolder);
+
             // Generate command set for scenes
             for(var x = 0; x < input.definitions.Length; x++)
             {
@@ -77,33 +47,42 @@ namespace UnityEditor.Build.AssetBundle
                 if(def.explicitAssets.Length > 0)
                 {
                     var assetPath = AssetDatabase.GUIDToAssetPath(def.explicitAssets[0].asset.ToString());
-                    if(assetPath.EndsWith(".unity"))
+                    if(AssetDatabase.GetMainAssetTypeAtPath(assetPath) == typeof(SceneAsset))
                     {
                         SceneLoadInfo sceneInfo;
-                        var success = prepareScene.Convert(assetPath, settings, out sceneInfo, false);
+                        if(!prepareScene.Convert(assetPath, settings, out sceneInfo, false))
+                        {
+                            UnityEngine.Debug.LogError("Scene build of " + assetPath + " failed in PrepareScene");
+                            continue;
+                        }
 
-                        BuildCommandSet iterSceneCommands;
-                        if(!scenePacker.Convert(sceneInfo, out iterSceneCommands, false))
-                            return false;
+                        BuildCommandSet sceneCommands;
+                        if(!scenePacker.Convert(sceneInfo, out sceneCommands, false))
+                        {
+                            UnityEngine.Debug.LogError("Scene build of " + assetPath + " failed in ScenePacker");
+                            continue;
+                        }
 
-                        ArrayUtility.AddRange<BuildCommandSet.Command>(ref sceneCommands.commands, iterSceneCommands.commands);
+                        // Fix up asset bundle name
+                        sceneCommands.commands[0].assetBundleName = def.assetBundleName;
+
+                        commandList.AddRange(sceneCommands.commands);
                         ArrayUtility.RemoveAt<BuildInput.Definition>(ref input.definitions, x--);
                     }
                 }
             }
 
-            // Generate command set for loose assets
+            // Generate command set for loose bundles
             BuildCommandSet assetCommands;
             var packer = new Unity5Packer();
             if (!packer.Convert(input, settings.target, out assetCommands))
                 return false;
 
-            // Mash up all of the command sets
-            if(sceneCommands.commands.Length > 0)
-                ArrayUtility.AddRange(ref allCommands.commands, sceneCommands.commands);
+            // Combine scene and loose bundle commands
+            commandList.AddRange(assetCommands.commands);
 
-            if(assetCommands.commands.Length > 0)
-                ArrayUtility.AddRange(ref allCommands.commands, assetCommands.commands);
+            var allCommands = new BuildCommandSet();
+            allCommands.commands = commandList.ToArray();
 
             // Calculate assetBundleDependencies
             BuildCommandSet depCommands;
@@ -123,13 +102,13 @@ namespace UnityEditor.Build.AssetBundle
             // Archive and compress resource files
             uint[] crc;
             var archiveWriter = new ArchiveWriter();
-            if (!archiveWriter.Convert(output, compression, settings.outputFolder, out crc))
+            if (!archiveWriter.Convert(output, compression, bundleOutputFolder, out crc))
                 return false;
 
             // Generate Unity5 compatible manifest files
             string[] manifestfiles;
             var manifestWriter = new Unity5ManifestWriter();
-            if (!manifestWriter.Convert(depCommands, output, crc, settings.outputFolder, out manifestfiles))
+            if (!manifestWriter.Convert(depCommands, output, crc, bundleOutputFolder, out manifestfiles))
                 return false;
 
             return true;
