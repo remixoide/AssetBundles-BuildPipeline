@@ -72,12 +72,16 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                     output.commands[o].explicitAssets[j].asset = input.definitions[i].explicitAssets[j].asset;
                     output.commands[o].explicitAssets[j].address = string.IsNullOrEmpty(input.definitions[i].explicitAssets[j].address) ? 
                         AssetDatabase.GUIDToAssetPath(input.definitions[i].explicitAssets[j].asset.ToString()) : input.definitions[i].explicitAssets[j].address;
+
+                    output.commands[o].explicitAssets[j].address = output.commands[o].explicitAssets[j].address.ToLower();
+
                     output.commands[o].explicitAssets[j].includedObjects = BuildInterface.GetPlayerObjectIdentifiersInAsset(input.definitions[i].explicitAssets[j].asset, target);
                     output.commands[o].explicitAssets[j].referencedObjects = BuildInterface.GetPlayerDependenciesForObjects(output.commands[i].explicitAssets[j].includedObjects, target);
 
                     allObjectIDs.UnionWith(output.commands[i].explicitAssets[j].includedObjects);
                     allObjectIDs.UnionWith(output.commands[i].explicitAssets[j].referencedObjects);
                 }
+
 
                 var k = 0;
                 output.commands[o].assetBundleObjects = new BuildCommandSet.SerializationInfo[allObjectIDs.Count];
