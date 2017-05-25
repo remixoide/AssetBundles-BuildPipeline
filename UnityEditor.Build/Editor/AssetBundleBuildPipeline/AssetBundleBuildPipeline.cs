@@ -27,7 +27,6 @@ namespace UnityEditor.Build.AssetBundle
 
             output = new BuildCommandSet();
 
-            var bundleOutputFolder = settings.outputFolder;
             settings.outputFolder = Path.Combine(settings.outputFolder, "_resources");
             Directory.CreateDirectory(settings.outputFolder);
 
@@ -78,7 +77,8 @@ namespace UnityEditor.Build.AssetBundle
                 return false;
             
             // Combine scene and loose bundle commands
-            commandList.AddRange(assetCommands.commands);
+            if(assetCommands.commands.Length > 0)
+                commandList.AddRange(assetCommands.commands);
             
             var allCommands = new BuildCommandSet();
             allCommands.commands = commandList.ToArray();
@@ -94,6 +94,11 @@ namespace UnityEditor.Build.AssetBundle
         public static bool ExecuteCommandSet(BuildSettings settings, BuildCommandSet commands, out BuildOutput output)
         {
             output = new BuildOutput();
+            output.results = new BuildOutput.Result[0];
+
+            if(commands.commands.IsNullOrEmpty())
+                return true;
+
             var compression = BuildCompression.DefaultUncompressed;
 
             var bundleOutputFolder = settings.outputFolder;

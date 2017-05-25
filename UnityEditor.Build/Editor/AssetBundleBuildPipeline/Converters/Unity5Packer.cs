@@ -47,9 +47,10 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             
             // Convert inputs
             output = new BuildCommandSet();
+            output.commands = new BuildCommandSet.Command[0];
 
             if (input.definitions.IsNullOrEmpty())
-                return false;
+                return true;
             
             var o = -1;
             output.commands = new BuildCommandSet.Command[input.definitions.Length];

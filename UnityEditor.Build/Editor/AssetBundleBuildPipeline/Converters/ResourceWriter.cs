@@ -38,6 +38,12 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
         public bool Convert(BuildCommandSet commands, BuildSettings settings, out BuildOutput output, bool useCache = true)
         {
+            output = new BuildOutput();
+            output.results = new BuildOutput.Result[0];
+
+            if(commands.commands.IsNullOrEmpty())
+                return true;
+
             // If enabled, try loading from cache
             var hash = CalculateInputHash(commands, settings);
             if (useCache && LoadFromCache(hash, settings.outputFolder, out output))
@@ -50,7 +56,6 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 if (ValidateCommand(bundle))
                     continue;
 
-                output = new BuildOutput();
                 return false;
             }
 

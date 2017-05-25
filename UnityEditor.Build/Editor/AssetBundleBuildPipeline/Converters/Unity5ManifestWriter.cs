@@ -53,8 +53,8 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             if (output.results.IsNullOrEmpty())
             {
                 manifestFiles = manifests.ToArray();
-                BuildLogger.LogError("Unable to continue writting manifests. No asset bundle results.");
-                return false;
+                BuildLogger.Log("Unable to continue writting manifests. No asset bundle results.");
+                return true;
             }
 
             // TODO: Prepare settings.outputFolder

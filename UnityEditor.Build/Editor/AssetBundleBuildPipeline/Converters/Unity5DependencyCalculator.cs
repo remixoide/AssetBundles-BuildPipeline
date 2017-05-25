@@ -48,7 +48,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             output = input;
 
             if (input.commands.IsNullOrEmpty())
-                return false;
+                return true;
 
             // Generate asset lookup
             var assetToBundle = new Dictionary<GUID, string>();
