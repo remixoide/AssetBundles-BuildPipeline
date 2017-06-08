@@ -34,6 +34,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             scene.explicitAssets = new[] { sceneLoadInfo };
             scene.scene = input.scene;
             scene.processedScene = input.processedScene;
+            scene.globalUsage = input.globalUsage;
 
             output = new BuildCommandSet { commands = new [] { scene } };
             return true;

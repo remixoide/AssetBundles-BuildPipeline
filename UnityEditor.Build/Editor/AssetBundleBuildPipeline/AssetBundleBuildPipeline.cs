@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using UnityEditor.Build.AssetBundle.DataConverters;
 using UnityEditor.Build.Utilities;
@@ -45,6 +46,8 @@ namespace UnityEditor.Build.AssetBundle
             BuildOutput output;
             var resourceWriter = new ResourceWriter();
             success &= resourceWriter.Convert(commands, settings, out output, false);
+
+            output.results[0].resourceFiles = output.results[0].resourceFiles.Concat(sceneInfo.resourceFiles).ToArray();
 
             uint[] crc;
             var archiveWriter = new ArchiveWriter();
