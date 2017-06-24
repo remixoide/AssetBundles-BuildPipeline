@@ -33,7 +33,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 }
             }
 
-            return HashingMethods.CalculateMD5Hash(Version, commands, settings.target, settings.group, settings.editorBundles, assetHashes);
+            return HashingMethods.CalculateMD5Hash(Version, commands, settings.target, settings.group, settings.typeDB, assetHashes);
         }
 
         public bool Convert(BuildCommandSet commands, BuildSettings settings, out BuildOutput output, bool useCache = true)
@@ -120,13 +120,6 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 foreach (var serializedInfo in bundle.assetBundleObjects)
                 {
                     if (serializedInfo.serializationIndex == 1)
-                    {
-                        BuildLogger.LogError("Unable to continue resource writing. Asset bundle '{0}' has a serialized object with index of '1'. This is a reserved index and can not be used.",
-                            bundle.assetBundleName);
-                        return false;
-                    }
-
-                    if (!string.IsNullOrEmpty(bundle.scene) && serializedInfo.serializationIndex == 2)
                     {
                         BuildLogger.LogError("Unable to continue resource writing. Asset bundle '{0}' has a serialized object with index of '1'. This is a reserved index and can not be used.",
                             bundle.assetBundleName);

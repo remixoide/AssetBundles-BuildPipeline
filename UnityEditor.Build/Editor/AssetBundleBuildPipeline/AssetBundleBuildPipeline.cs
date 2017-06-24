@@ -1,10 +1,10 @@
 ﻿using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using UnityEditor.Build.AssetBundle.DataConverters;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
+using UnityEditor.Experimental.Build.Player;
 using UnityEditor.Sprites;
 
 namespace UnityEditor.Build.AssetBundle
@@ -17,10 +17,14 @@ namespace UnityEditor.Build.AssetBundle
             settings.target = EditorUserBuildSettings.activeBuildTarget;
             settings.group = EditorUserBuildSettings.selectedBuildTargetGroup;
             settings.outputFolder = "AssetBundles/";// + settings.target;
-            // Example: Point this to the dll's of previous player build
-            // TODO: improve this, certain platforms don't have dll's after a player build (IL2CPP, Android, etc)
-            settings.scriptsFolder = "Build/Player_Data/Managed";
-            settings.editorBundles = false;
+            return settings;
+        }
+        public static ScriptCompilationSettings GenerateBuildPlayerSettings()
+        {
+            var settings = new ScriptCompilationSettings();
+            settings.target = EditorUserBuildSettings.activeBuildTarget;
+            settings.targetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
+            settings.outputFolder = "AssetBundles/";// + settings.target;
             return settings;
         }
 
@@ -31,11 +35,16 @@ namespace UnityEditor.Build.AssetBundle
             buildTimer.Start();
 
             var settings = GenerateBuildSettings();
+            var formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+            using (var stream = new FileStream(@"C:\Projects\AssetBundlesHLAPI\TypeDB", FileMode.Open, FileAccess.Read))
+                settings.typeDB = (TypeDB)formatter.Deserialize(stream);
+
             var compression = BuildCompression.DefaultUncompressed;
 
-            SceneLoadInfo sceneInfo;
+            SceneLoadInfo[] sceneInfo = new SceneLoadInfo[2];
             var prepareScene = new PrepareScene();
-            var success = prepareScene.Convert("Assets/Debug/TestScene.unity", settings, out sceneInfo, false);
+            var success = prepareScene.Convert("Assets/Debug/TestScene1.unity", settings, out sceneInfo[0], false);
+            success &= prepareScene.Convert("Assets/Debug/TestScene2.unity", settings, out sceneInfo[1], false);
 
             BuildCommandSet commands;
             var packer = new ScenePacker();
@@ -47,7 +56,7 @@ namespace UnityEditor.Build.AssetBundle
             var resourceWriter = new ResourceWriter();
             success &= resourceWriter.Convert(commands, settings, out output, false);
 
-            output.results[0].resourceFiles = output.results[0].resourceFiles.Concat(sceneInfo.resourceFiles).ToArray();
+            output.results[0].resourceFiles = output.results[0].resourceFiles.Concat(sceneInfo[0].resourceFiles).Concat(sceneInfo[1].resourceFiles).ToArray();
 
             uint[] crc;
             var archiveWriter = new ArchiveWriter();

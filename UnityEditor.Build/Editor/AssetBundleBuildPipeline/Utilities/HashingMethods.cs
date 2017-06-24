@@ -30,7 +30,11 @@ namespace UnityEditor.Build.Utilities
             using (var stream = new MemoryStream())
             {
                 foreach (var obj in objects)
+                {
+                    if (obj == null)
+                        continue;
                     formatter.Serialize(stream, obj);
+                }
                 hash = md5.ComputeHash(stream.ToArray());
             }
             return new Hash128(hash[0], hash[1], hash[2], hash[3]);
