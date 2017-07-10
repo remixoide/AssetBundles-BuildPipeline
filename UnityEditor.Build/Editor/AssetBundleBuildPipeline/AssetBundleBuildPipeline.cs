@@ -19,6 +19,7 @@ namespace UnityEditor.Build.AssetBundle
             settings.outputFolder = "AssetBundles/";// + settings.target;
             return settings;
         }
+
         public static ScriptCompilationSettings GenerateBuildPlayerSettings()
         {
             var settings = new ScriptCompilationSettings();
@@ -73,14 +74,6 @@ namespace UnityEditor.Build.AssetBundle
             var buildTimer = new Stopwatch();
             buildTimer.Start();
 
-            var success = BuildAssetBundles_Internal();
-            
-            buildTimer.Stop();
-            BuildLogger.Log("Build Asset Bundles {0} in: {1:c}", success ? "completed" : "failed", buildTimer.Elapsed);
-        }
-
-        private static bool BuildAssetBundles_Internal()
-        {
             var input = BuildInterface.GenerateBuildInput();
             var settings = GenerateBuildSettings();
             var formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
@@ -89,6 +82,14 @@ namespace UnityEditor.Build.AssetBundle
 
             var compression = BuildCompression.DefaultUncompressed;
 
+            var success = BuildAssetBundles(input, settings, compression);
+            
+            buildTimer.Stop();
+            BuildLogger.Log("Build Asset Bundles {0} in: {1:c}", success ? "completed" : "failed", buildTimer.Elapsed);
+        }
+
+        public static bool BuildAssetBundles(BuildInput input, BuildSettings settings, BuildCompression compression)
+        {
             // Rebuild sprite atlas cache for correct dependency calculation & writing
             Packer.RebuildAtlasCacheIfNeeded(settings.target, true, Packer.Execution.Normal);
 
