@@ -4,11 +4,12 @@ using System.Text;
 using UnityEditor.Build.Cache;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
+using UnityEditor.Experimental.Build.Player;
 using UnityEngine;
 
 namespace UnityEditor.Build.AssetBundle.DataConverters
 {
-    public class Unity5Packer : IDataConverter<BuildInput, BuildTarget, BuildCommandSet>
+    public class Unity5Packer : IDataConverter<BuildInput, BuildTarget, TypeDB, BuildCommandSet>
     {
         public uint Version { get { return 1; } }
 
@@ -38,7 +39,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             return HashingMethods.CalculateMD5Hash(Version, input, target, assetHashes);
         }
 
-        public bool Convert(BuildInput input, BuildTarget target, out BuildCommandSet output, bool useCache = true)
+        public bool Convert(BuildInput input, BuildTarget target, TypeDB typeDB, out BuildCommandSet output, bool useCache = true)
         {
             // If enabled, try loading from cache
             var hash = CalculateInputHash(input, target);
@@ -72,7 +73,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                     output.commands[o].explicitAssets[j].address = string.IsNullOrEmpty(input.definitions[i].explicitAssets[j].address) ? 
                         AssetDatabase.GUIDToAssetPath(input.definitions[i].explicitAssets[j].asset.ToString()) : input.definitions[i].explicitAssets[j].address;
                     output.commands[o].explicitAssets[j].includedObjects = BuildInterface.GetPlayerObjectIdentifiersInAsset(input.definitions[i].explicitAssets[j].asset, target);
-                    output.commands[o].explicitAssets[j].referencedObjects = BuildInterface.GetPlayerDependenciesForObjects(output.commands[i].explicitAssets[j].includedObjects, target);
+                    output.commands[o].explicitAssets[j].referencedObjects = BuildInterface.GetPlayerDependenciesForObjects(output.commands[i].explicitAssets[j].includedObjects, target, typeDB);
 
                     allObjectIDs.UnionWith(output.commands[i].explicitAssets[j].includedObjects);
                     allObjectIDs.UnionWith(output.commands[i].explicitAssets[j].referencedObjects);

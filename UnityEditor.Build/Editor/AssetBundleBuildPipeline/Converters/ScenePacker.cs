@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using UnityEditor.Experimental.Build;
 using UnityEditor.Experimental.Build.AssetBundle;
 
 namespace UnityEditor.Build.AssetBundle.DataConverters
@@ -14,7 +15,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
         public bool Convert(SceneLoadInfo[] input, out BuildCommandSet output, bool useCache = true)
         {
-            GlobalUsageTags globalUsageTags = new GlobalUsageTags();
+            var globalUsageTags = new BuildUsageTagGlobal();
 
             var assetInfo = new List<BuildCommandSet.AssetLoadInfo>();
             var allObjects = new HashSet<ObjectIdentifier>();

@@ -83,6 +83,10 @@ namespace UnityEditor.Build.AssetBundle
         {
             var input = BuildInterface.GenerateBuildInput();
             var settings = GenerateBuildSettings();
+            var formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+            using (var stream = new FileStream(@"C:\Projects\AssetBundlesHLAPI\TypeDB", FileMode.Open, FileAccess.Read))
+                settings.typeDB = (TypeDB)formatter.Deserialize(stream);
+
             var compression = BuildCompression.DefaultUncompressed;
 
             // Rebuild sprite atlas cache for correct dependency calculation & writing
@@ -91,7 +95,7 @@ namespace UnityEditor.Build.AssetBundle
             // Generate command set
             BuildCommandSet commands;
             var packer = new Unity5Packer();
-            if (!packer.Convert(input, settings.target, out commands))
+            if (!packer.Convert(input, settings.target, settings.typeDB, out commands))
                 return false;
 
             //DebugPrintCommandSet(ref commands);
