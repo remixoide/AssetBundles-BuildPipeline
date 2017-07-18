@@ -1,5 +1,4 @@
-﻿using UnityEditor.Build.Cache;
-using UnityEditor.Build.Utilities;
+﻿using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
 using UnityEngine;
 
@@ -9,16 +8,19 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
     {
         public uint Version { get { return 1; } }
 
-        private Hash128 CalculateInputHash(AssetBundleBuild[] input)
+        private Hash128 CalculateInputHash(AssetBundleBuild[] input, bool useCache)
         {
+            if (!useCache)
+                return new Hash128();
+
             return HashingMethods.CalculateMD5Hash(Version, input);
         }
 
         public bool Convert(AssetBundleBuild[] input, out BuildInput output, bool useCache = true)
         {
             // If enabled, try loading from cache
-            var hash = CalculateInputHash(input);
-            if (useCache && LoadFromCache(hash, out output))
+            var hash = CalculateInputHash(input, useCache);
+            if (useCache && BuildCache.TryLoadCachedResults(hash, out output))
                 return true;
 
             // Convert inputs
@@ -47,19 +49,9 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             }
 
             // Cache results
-            if (useCache)
-                SaveToCache(hash, output);
+            if (useCache && !BuildCache.SaveCachedResults(hash, output))
+                BuildLogger.LogWarning("Unable to cache AssetBundleBuildConverter results.");
             return true;
-        }
-
-        private bool LoadFromCache(Hash128 hash, out BuildInput output)
-        {
-            return BuildCache.TryLoadCachedResults(hash, out output);
-        }
-
-        private void SaveToCache(Hash128 hash, BuildInput output)
-        {
-            BuildCache.SaveCachedResults(hash, output);
         }
     }
 }

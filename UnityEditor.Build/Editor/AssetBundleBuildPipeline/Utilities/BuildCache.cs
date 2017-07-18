@@ -4,7 +4,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using UnityEditor.Build.Utilities;
 using UnityEngine;
 
-namespace UnityEditor.Build.Cache
+namespace UnityEditor.Build.Utilities
 {
     public static class BuildCache
     {

@@ -9,33 +9,48 @@ namespace UnityEditor.Build.Utilities
     {
         public static Hash128 CalculateMD5Hash(object obj)
         {
-            // TODO: Don't use boxing
             byte[] hash;
-            var md5 = MD5.Create();
-            var formatter = new BinaryFormatter();
-            using (var stream = new MemoryStream())
+            using (var md5 = MD5.Create())
             {
-                formatter.Serialize(stream, obj);
-                hash = md5.ComputeHash(stream.ToArray());
+                var formatter = new BinaryFormatter();
+                using (var stream = new MemoryStream())
+                {
+                    formatter.Serialize(stream, obj);
+                    hash = md5.ComputeHash(stream.ToArray());
+                }
             }
             return new Hash128(hash[0], hash[1], hash[2], hash[3]);
         }
 
         public static Hash128 CalculateMD5Hash(params object[] objects)
         {
-            // TODO: Don't use boxing
             byte[] hash;
-            var md5 = MD5.Create();
-            var formatter = new BinaryFormatter();
-            using (var stream = new MemoryStream())
+            using (var md5 = MD5.Create())
             {
-                foreach (var obj in objects)
+                var formatter = new BinaryFormatter();
+                using (var stream = new MemoryStream())
                 {
-                    if (obj == null)
-                        continue;
-                    formatter.Serialize(stream, obj);
+                    foreach (var obj in objects)
+                    {
+                        if (obj == null)
+                            continue;
+                        formatter.Serialize(stream, obj);
+                    }
+                    hash = md5.ComputeHash(stream.ToArray());
                 }
-                hash = md5.ComputeHash(stream.ToArray());
+            }
+            return new Hash128(hash[0], hash[1], hash[2], hash[3]);
+        }
+
+        public static Hash128 CalculateFileMD5Hash(string filePath)
+        {
+            byte[] hash;
+            using (var md5 = MD5.Create())
+            {
+                using (var stream = new FileStream(filePath, FileMode.Open))
+                {
+                    hash = md5.ComputeHash(stream);
+                }
             }
             return new Hash128(hash[0], hash[1], hash[2], hash[3]);
         }

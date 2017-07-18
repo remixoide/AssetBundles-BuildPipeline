@@ -1,4 +1,5 @@
-﻿using UnityEditor.Build.AssetBundle;
+﻿using System.IO;
+using UnityEditor.Build.AssetBundle;
 using UnityEditor.Build.AssetBundle.DataConverters;
 using UnityEditor.Experimental.Build.AssetBundle;
 using UnityEditor.Experimental.Build.Player;
@@ -10,11 +11,13 @@ namespace UnityEditor.Build
     {
         public static AssetBundleManifest BuildAssetBundles(string outputPath, BuildAssetBundleOptions assetBundleOptions, BuildTarget targetPlatform)
         {
-            var playerSettings = AssetBundleBuildPipeline.GenerateBuildPlayerSettings();
+            var playerSettings = BundleBuildPipeline.GeneratePlayerBuildSettings();
             playerSettings.target = targetPlatform;
-            var playerResults = PlayerBuildInterface.CompilePlayerScripts(playerSettings);
+            var playerResults = PlayerBuildInterface.CompilePlayerScripts(playerSettings, BundleBuildPipeline.kTempPlayerBuildPath);
+            if (Directory.Exists(BundleBuildPipeline.kTempPlayerBuildPath))
+                Directory.Delete(BundleBuildPipeline.kTempPlayerBuildPath, true);
             
-            var bundleSettings = AssetBundleBuildPipeline.GenerateBuildSettings();
+            var bundleSettings = BundleBuildPipeline.GenerateBundleBuildSettings();
             bundleSettings.target = targetPlatform;
             bundleSettings.typeDB = playerResults.typeDB;
 
@@ -24,18 +27,22 @@ namespace UnityEditor.Build
             else if ((assetBundleOptions & BuildAssetBundleOptions.UncompressedAssetBundle) != 0)
                 compression = BuildCompression.DefaultUncompressed;
 
-            AssetBundleBuildPipeline.BuildAssetBundles(BuildInterface.GenerateBuildInput(), bundleSettings, compression);
+            var useCache = (assetBundleOptions & BuildAssetBundleOptions.ForceRebuildAssetBundle) != 0;
+
+            BundleBuildPipeline.BuildAssetBundles(BuildInterface.GenerateBuildInput(), bundleSettings, outputPath, compression, useCache);
             return null;
             //return UnityEditor.BuildPipeline.BuildAssetBundles(outputPath, assetBundleOptions, targetPlatform);
         }
 
         public static AssetBundleManifest BuildAssetBundles(string outputPath, AssetBundleBuild[] builds, BuildAssetBundleOptions assetBundleOptions, BuildTarget targetPlatform)
         {
-            var playerSettings = AssetBundleBuildPipeline.GenerateBuildPlayerSettings();
+            var playerSettings = BundleBuildPipeline.GeneratePlayerBuildSettings();
             playerSettings.target = targetPlatform;
-            var playerResults = PlayerBuildInterface.CompilePlayerScripts(playerSettings);
+            var playerResults = PlayerBuildInterface.CompilePlayerScripts(playerSettings, BundleBuildPipeline.kTempPlayerBuildPath);
+            if (Directory.Exists(BundleBuildPipeline.kTempPlayerBuildPath))
+                Directory.Delete(BundleBuildPipeline.kTempPlayerBuildPath, true);
 
-            var bundleSettings = AssetBundleBuildPipeline.GenerateBuildSettings();
+            var bundleSettings = BundleBuildPipeline.GenerateBundleBuildSettings();
             bundleSettings.target = targetPlatform;
             bundleSettings.typeDB = playerResults.typeDB;
 
@@ -50,7 +57,9 @@ namespace UnityEditor.Build
             if (!converter.Convert(builds, out buildInput))
                 return null;
 
-            AssetBundleBuildPipeline.BuildAssetBundles(buildInput, bundleSettings, compression);
+            var useCache = (assetBundleOptions & BuildAssetBundleOptions.ForceRebuildAssetBundle) != 0;
+
+            BundleBuildPipeline.BuildAssetBundles(buildInput, bundleSettings, outputPath, compression, useCache);
             return null;
             //return UnityEditor.BuildPipeline.BuildAssetBundles(outputPath, builds, assetBundleOptions, targetPlatform);
         }

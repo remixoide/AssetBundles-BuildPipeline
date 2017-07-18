@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.IO;
-using UnityEditor.Build.Cache;
 using UnityEditor.Build.Utilities;
 using UnityEditor.Experimental.Build.AssetBundle;
 using UnityEngine;
@@ -53,7 +52,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             if (output.results.IsNullOrEmpty())
             {
                 manifestFiles = manifests.ToArray();
-                BuildLogger.LogError("Unable to continue writting manifests. No asset bundle results.");
+                BuildLogger.LogError("Unable to continue writing manifests. No asset bundle results.");
                 return false;
             }
 
@@ -163,5 +162,4 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             return string.Format("{0}/{1}.manifest", outputFolder, bundleName);
         }
     }
-
 }
