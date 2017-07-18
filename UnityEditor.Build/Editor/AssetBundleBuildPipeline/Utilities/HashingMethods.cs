@@ -16,7 +16,7 @@ namespace UnityEditor.Build.Utilities
                 using (var stream = new MemoryStream())
                 {
                     formatter.Serialize(stream, obj);
-                    hash = md5.ComputeHash(stream.ToArray());
+                    hash = md5.ComputeHash(stream);
                 }
             }
             return new Hash128(hash[0], hash[1], hash[2], hash[3]);
@@ -36,7 +36,7 @@ namespace UnityEditor.Build.Utilities
                             continue;
                         formatter.Serialize(stream, obj);
                     }
-                    hash = md5.ComputeHash(stream.ToArray());
+                    hash = md5.ComputeHash(stream);
                 }
             }
             return new Hash128(hash[0], hash[1], hash[2], hash[3]);

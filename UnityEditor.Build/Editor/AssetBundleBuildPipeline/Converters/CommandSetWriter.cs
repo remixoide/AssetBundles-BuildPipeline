@@ -24,6 +24,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             var bundles = new List<BuildCommandSet.Command>();
             foreach (var bundle in bundleSet)
                 bundles.Add(m_NameToBundle[bundle]);
+            // Asset hash
 
             return HashingMethods.CalculateMD5Hash(Version, bundles, settings);
         }
@@ -81,7 +82,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                     continue;
                 }
 
-                result = BuildInterface.WriteResourceFile(commandSet, settings, outputFolder, command.assetBundleName);
+                result = BuildInterface.WriteResourceFilesForBundle(commandSet, command.assetBundleName, settings, outputFolder);
                 results.AddRange(result.results);
 
                 if (useCache && !TrySaveToCache(hash, result, outputFolder))

@@ -14,7 +14,7 @@ namespace UnityEditor.Build.AssetBundle
         public const string kTempPlayerBuildPath = "Temp/PlayerBuildData";
         public const string kTempBundleBuildPath = "Temp/BundleBuildData";
 
-        public const string kDefaultOutputPath = "Temp/BundleBuildData";
+        public const string kDefaultOutputPath = "AssetBundles";
 
         public static BuildSettings GenerateBundleBuildSettings()
         {

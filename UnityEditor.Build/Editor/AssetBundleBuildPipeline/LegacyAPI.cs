@@ -27,7 +27,7 @@ namespace UnityEditor.Build
             else if ((assetBundleOptions & BuildAssetBundleOptions.UncompressedAssetBundle) != 0)
                 compression = BuildCompression.DefaultUncompressed;
 
-            var useCache = (assetBundleOptions & BuildAssetBundleOptions.ForceRebuildAssetBundle) != 0;
+            var useCache = (assetBundleOptions & BuildAssetBundleOptions.ForceRebuildAssetBundle) == 0;
 
             BundleBuildPipeline.BuildAssetBundles(BuildInterface.GenerateBuildInput(), bundleSettings, outputPath, compression, useCache);
             return null;
@@ -57,7 +57,7 @@ namespace UnityEditor.Build
             if (!converter.Convert(builds, out buildInput))
                 return null;
 
-            var useCache = (assetBundleOptions & BuildAssetBundleOptions.ForceRebuildAssetBundle) != 0;
+            var useCache = (assetBundleOptions & BuildAssetBundleOptions.ForceRebuildAssetBundle) == 0;
 
             BundleBuildPipeline.BuildAssetBundles(buildInput, bundleSettings, outputPath, compression, useCache);
             return null;
