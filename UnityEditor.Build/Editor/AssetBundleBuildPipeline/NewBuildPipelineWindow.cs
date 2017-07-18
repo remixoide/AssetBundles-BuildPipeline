@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using UnityEditor.Build.AssetBundle;
 using UnityEditor.Build.Utilities;
@@ -104,6 +105,9 @@ namespace UnityEditor.Build
 
         private void BuildAssetBundles()
         {
+            var buildTimer = new Stopwatch();
+            buildTimer.Start();
+
             var playerSettings = BundleBuildPipeline.GeneratePlayerBuildSettings();
             playerSettings.target = m_Settings.buildTarget;
             var playerResults = PlayerBuildInterface.CompilePlayerScripts(playerSettings, BundleBuildPipeline.kTempPlayerBuildPath);
@@ -129,7 +133,10 @@ namespace UnityEditor.Build
                     break;
             }
 
-            BundleBuildPipeline.BuildAssetBundles(BuildInterface.GenerateBuildInput(), bundleSettings, m_Settings.outputPath, compression, m_Settings.useBuildCache);
+            var success = BundleBuildPipeline.BuildAssetBundles(BuildInterface.GenerateBuildInput(), bundleSettings, m_Settings.outputPath, compression, m_Settings.useBuildCache);
+
+            buildTimer.Stop();
+            BuildLogger.Log("Build Asset Bundles {0} in: {1:c}", success ? "completed" : "failed", buildTimer.Elapsed);
         }
     }
 }
