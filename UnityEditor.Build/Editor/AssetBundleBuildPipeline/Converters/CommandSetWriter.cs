@@ -9,7 +9,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
     public class CommandSetWriter : IDataConverter<BuildCommandSet, BuildSettings, string, BuildOutput>
     {
         private Dictionary<string, BuildCommandSet.Command> m_NameToBundle = new Dictionary<string, BuildCommandSet.Command>();
-        private Dictionary<string, List<string>> m_NameToDependents = new Dictionary<string, List<string>>();
+        private Dictionary<string, HashSet<string>> m_NameToDependentSet = new Dictionary<string, HashSet<string>>();
 
         public uint Version { get { return 1; } }
 
@@ -20,36 +20,55 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
             // NOTE: correct hash should be based off command, command dependencies, dependent commands, build target, build group, and build typedb
             // TODO: Remove dependents once Usage Tag calculation is passed into the write command
+            var bundleSet = m_NameToDependentSet[command.assetBundleName];
             var bundles = new List<BuildCommandSet.Command>();
-            bundles.Add(command);
-            foreach (var dependency in command.assetBundleDependencies)
-                bundles.Add(m_NameToBundle[dependency]);
+            foreach (var bundle in bundleSet)
+                bundles.Add(m_NameToBundle[bundle]);
 
-            var dependents = m_NameToDependents[command.assetBundleName];
-            foreach (var dependent in dependents)
-                bundles.Add(m_NameToBundle[dependent]);
+            return HashingMethods.CalculateMD5Hash(Version, bundles, settings);
+        }
 
-            return HashingMethods.CalculateMD5Hash(Version, bundles, settings.target, settings.group, settings.typeDB);
+        private void CacheDataForCommandSet(BuildCommandSet commandSet, bool useCache)
+        {
+            if (!useCache)
+                return;
+            
+            // Generate data needed for cache hash generation
+            foreach (var command in commandSet.commands)
+                m_NameToBundle[command.assetBundleName] = command;
+
+            foreach (var command in commandSet.commands)
+            {
+                HashSet<string> dependentSet;
+                if (!m_NameToDependentSet.TryGetValue(command.assetBundleName, out dependentSet))
+                {
+                    dependentSet = new HashSet<string>();
+                    m_NameToDependentSet[command.assetBundleName] = dependentSet;
+                }
+
+                // Add current bundle
+                dependentSet.Add(command.assetBundleName);
+                foreach (var dependency in command.assetBundleDependencies)
+                {
+                    // Add bundle dependencies
+                    dependentSet.Add(dependency);
+
+                    // TODO: Remove reverse dependencies once Usage Tag calculation is passed into the write command
+                    HashSet<string> dependencySet;
+                    if (!m_NameToDependentSet.TryGetValue(dependency, out dependencySet))
+                    {
+                        dependencySet = new HashSet<string>();
+                        m_NameToDependentSet[dependency] = dependencySet;
+                    }
+                    // Add reverse bundle dependencies
+                    dependencySet.Add(command.assetBundleName);
+                }
+            }
         }
 
         public bool Convert(BuildCommandSet commandSet, BuildSettings settings, string outputFolder, out BuildOutput output, bool useCache = true)
         {
-            if (useCache)
-            {
-                // Generate data needed for cache hash generation
-                foreach (var command in commandSet.commands)
-                {
-                    m_NameToBundle[command.assetBundleName] = command;
-
-                    foreach (var dependency in command.assetBundleDependencies)
-                    {
-                        List<string> dependents;
-                        if (!m_NameToDependents.TryGetValue(dependency, out dependents))
-                            m_NameToDependents[dependency] = dependents;
-                        dependents.Add(command.assetBundleName);
-                    }
-                }
-            }
+            CacheDataForCommandSet(commandSet, useCache);
 
             var results = new List<BuildOutput.Result>();
             foreach (var command in commandSet.commands)
@@ -61,7 +80,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                     results.AddRange(result.results);
                     continue;
                 }
-                
+
                 result = BuildInterface.WriteResourceFile(commandSet, settings, outputFolder, command.assetBundleName);
                 results.AddRange(result.results);
 
@@ -94,7 +113,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             var artifacts = new List<string>();
             foreach (var result in output.results)
             {
-                foreach(var resource in result.resourceFiles)
+                foreach (var resource in result.resourceFiles)
                     artifacts.Add(Path.GetFileName(resource.fileName));
             }
 

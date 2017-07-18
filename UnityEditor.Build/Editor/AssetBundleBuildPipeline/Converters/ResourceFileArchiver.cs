@@ -20,9 +20,9 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
             if (!useCache)
                 return new Hash128();
 
-            var fileHashes = new List<Hash128>();
+            var fileHashes = new List<string>();
             foreach (var file in resourceFiles)
-                fileHashes.Add(HashingMethods.CalculateFileMD5Hash(file.fileName));
+                fileHashes.Add(HashingMethods.CalculateFileMD5Hash(file.fileName).ToString());
             return HashingMethods.CalculateMD5Hash(Version, fileHashes, compression);
         }
 
@@ -50,7 +50,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 crc = BuildInterface.ArchiveAndCompress(resourceFiles.ToArray(), filePath, compression);
                 output[bundle.assetBundleName] = crc;
 
-                if (useCache && !TrySaveToCache(hash, filePath, crc, outputFolder))
+                if (useCache && !TrySaveToCache(hash, bundle.assetBundleName, crc, outputFolder))
                     BuildLogger.LogWarning("Unable to cache ResourceFileArchiver result for bundle {0}.", bundle.assetBundleName);
             }
 
@@ -75,10 +75,7 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
 
         private bool TrySaveToCache(Hash128 hash, string filePath, uint output, string outputFolder)
         {
-            var artifacts = new List<string>();
-            artifacts.Add(filePath);
-
-            return BuildCache.SaveCachedResultsAndArtifacts(hash, output, artifacts.ToArray(), outputFolder);
+            return BuildCache.SaveCachedResultsAndArtifacts(hash, output, new [] { filePath }, outputFolder);
         }
     }
 }

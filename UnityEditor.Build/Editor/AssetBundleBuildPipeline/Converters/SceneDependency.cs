@@ -24,12 +24,12 @@ namespace UnityEditor.Build.AssetBundle.DataConverters
                 return new Hash128();
 
             var path = AssetDatabase.GUIDToAssetPath(asset.ToString());
-            var assetHash = AssetDatabase.GetAssetDependencyHash(path);
+            var assetHash = AssetDatabase.GetAssetDependencyHash(path).ToString();
             var dependencies = AssetDatabase.GetDependencies(path);
-            var dependencyHashes = new Hash128[dependencies.Length];
+            var dependencyHashes = new string[dependencies.Length];
             for(var i = 0; i < dependencies.Length; ++i)
-                dependencyHashes[i] = AssetDatabase.GetAssetDependencyHash(dependencies[i]);
-            return HashingMethods.CalculateMD5Hash(Version, assetHash, dependencyHashes, settings.target, settings.group, settings.typeDB);
+                dependencyHashes[i] = AssetDatabase.GetAssetDependencyHash(dependencies[i]).ToString();
+            return HashingMethods.CalculateMD5Hash(Version, assetHash, dependencyHashes, settings);
         }
 
         public bool Convert(GUID scene, BuildSettings settings, string outputFolder, out SceneLoadInfo output, bool useCache = true)

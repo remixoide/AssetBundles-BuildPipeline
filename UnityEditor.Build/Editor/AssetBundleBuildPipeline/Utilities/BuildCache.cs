@@ -93,6 +93,8 @@ namespace UnityEditor.Build.Utilities
             }
             catch (Exception)
             {
+                if (Directory.Exists(path))
+                    Directory.Delete(path, true);
                 return false;
             }
             return true;
@@ -102,30 +104,48 @@ namespace UnityEditor.Build.Utilities
         {
             var path = GetPathForCachedArtifacts(hash);
 
+            var result = true;
             try
             {
                 Directory.CreateDirectory(path);
                 foreach (var artifact in artifactPaths)
                 {
                     var source = string.Format("{0}/{1}", rootPath, artifact);
-                    if (File.Exists(source))
-                        File.Copy(source, string.Format("{0}/{1}", path, artifact), true);
-                    else
+                    if (!File.Exists(source))
+                    {
                         BuildLogger.LogWarning("Unable to find source file '{0}' to add to the build cache.", artifact);
+                        result = false;
+                        continue;
+                    }
+
+                    File.Copy(source, string.Format("{0}/{1}", path, artifact), true);
                 }
             }
             catch (Exception)
             {
+                if (Directory.Exists(path))
+                    Directory.Delete(path, true);
                 return false;
             }
-            return true;
+
+            if (!result && Directory.Exists(path))
+                Directory.Delete(path, true);
+            return result;
         }
 
         public static bool SaveCachedResultsAndArtifacts<T>(Hash128 hash, T results, string[] artifactPaths, string rootPath)
         {
             if (!SaveCachedResults(hash, results))
                 return false;
-            return SaveCachedArtifacts(hash, artifactPaths, rootPath);
+
+            if (SaveCachedArtifacts(hash, artifactPaths, rootPath))
+                return true;
+
+            // Artifacts failed to cache, delete results
+            var path = GetPathForCachedResults(hash);
+            if (Directory.Exists(path))
+                Directory.Delete(path, true);
+            return false;
         }
     }
 }
